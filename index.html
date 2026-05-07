@@ -96,6 +96,7 @@ const MENU=[
   {id:'ktoiznas',emoji:'🤔',name:'Кто из нас?',desc:'Тайное голосование',from:'from-blue-800',to:'to-blue-950',border:'border-blue-600'},
   {id:'svetofor',emoji:'🚦',name:'Светофор',desc:'Нажал — кто-то пьёт',from:'from-green-800',to:'to-green-950',border:'border-green-600'},
   {id:'knb',emoji:'✊',name:'КНБ на пьянку',desc:'Проиграл — пьёшь',from:'from-teal-800',to:'to-teal-950',border:'border-teal-600'},
+  {id:'bill',emoji:'💵',name:'Делим счёт',desc:'Победитель не платит',from:'from-emerald-800',to:'to-emerald-950',border:'border-emerald-600'},
 ];
 
 function HomeScreen({onSelect}){
@@ -707,6 +708,123 @@ function KNBGame({onBack}){
   );
 }
 
+/* ═══════════════ 7. ДЕЛИМ СЧЁТ ═══════════════ */
+function BillGame({onBack}){
+  const[phase,setPhase]=useState('setup');
+  const[players,setPlayers]=useState([]);
+  const[amount,setAmount]=useState('');
+  const[rotation,setRotation]=useState(0);
+  const[spinning,setSpinning]=useState(false);
+  const[winner,setWinner]=useState(null);
+
+  function togglePlayer(id){
+    if(players.find(p=>p.charId===id)){setPlayers(players.filter(p=>p.charId!==id));}
+    else if(players.length<8){setPlayers([...players,{charId:id,name:CHAR_NAMES[id-1]}]);}
+  }
+  function renamePlayer(id,name){setPlayers(players.map(p=>p.charId===id?{...p,name}:p));}
+
+  function spin(){
+    if(spinning||players.length<2)return;
+    setWinner(null);setSpinning(true);
+    const wi=Math.floor(Math.random()*players.length);
+    const seg=360/players.length;
+    const targetR=rotation+(5+Math.floor(Math.random()*5))*360+(wi+0.5)*seg;
+    setRotation(targetR);
+    setTimeout(()=>{setSpinning(false);setWinner(players[wi]);},4000);
+  }
+
+  const total=parseFloat(amount)||0;
+  const payers=winner?players.filter(p=>p.charId!==winner.charId):players;
+  const perPerson=payers.length>0?total/payers.length:0;
+  const cx=150,cy=150,r=128,n=players.length||1;
+
+  if(phase==='spin') return(
+    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-stone-900 to-emerald-950 flex flex-col items-center p-4 overflow-y-auto">
+      <div className="w-full max-w-sm">
+        <BackBtn onBack={()=>{setPhase('setup');setWinner(null);}} light/>
+        <h1 className="text-2xl font-black text-emerald-100 text-center mb-1">💵 Делим счёт</h1>
+        <p className="text-emerald-400 text-sm text-center mb-3 opacity-80">Итого: <span className="font-black text-white">{total.toLocaleString('ru-RU')} ₽</span> · {players.length} чел.</p>
+        <div className="relative flex justify-center mb-4">
+          <svg viewBox="0 0 300 300" className="w-72 h-72">
+            <polygon points="150,4 141,26 159,26" fill="#fbbf24" stroke="#92400e" strokeWidth="1.5"/>
+            <g style={{transformOrigin:'150px 150px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 4s cubic-bezier(0.17,0.67,0.1,1)':'none'}}>
+              {players.map((pl,i)=>{
+                const seg=360/n,startD=i*seg,endD=(i+1)*seg;
+                const sR=(startD-90)*Math.PI/180,eR=(endD-90)*Math.PI/180;
+                const x1=cx+r*Math.cos(sR),y1=cy+r*Math.sin(sR),x2=cx+r*Math.cos(eR),y2=cy+r*Math.sin(eR);
+                const path=`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${seg>180?1:0} 1 ${x2} ${y2} Z`;
+                const midD=(startD+endD)/2,midR=(midD-90)*Math.PI/180;
+                const lx=cx+r*0.65*Math.cos(midR),ly=cy+r*0.65*Math.sin(midR);
+                const nm=pl.name.length>8?pl.name.slice(0,7)+'…':pl.name;
+                return(<g key={i}><path d={path} fill={WHEEL_COLORS[i%WHEEL_COLORS.length]} stroke="#fff" strokeWidth="2"/><text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={pl.name.length>6?'9':'11'} fontWeight="bold" transform={`rotate(${midD},${lx},${ly})`}>{nm}</text></g>);
+              })}
+              <circle cx={cx} cy={cy} r="18" fill="#1f2937" stroke="#fff" strokeWidth="2"/>
+            </g>
+          </svg>
+        </div>
+        {!winner&&<button onClick={spin} disabled={spinning} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-2xl active:scale-95 disabled:opacity-50 shadow-lg mb-3">{spinning?'⏳ Крутим...':'КРУТИТЬ!'}</button>}
+        {winner&&(
+          <div className="pop w-full">
+            <div className="flex flex-col items-center mb-4">
+              <div className="relative mb-2">
+                <img src={`chars/char${winner.charId}.jpg`} className="w-24 h-32 object-cover rounded-2xl border-4 border-emerald-400 shadow-xl" style={{objectPosition:'top'}}/>
+                <div className="absolute -top-2 -right-2 bg-emerald-400 text-stone-900 text-xs font-black px-2 py-1 rounded-full">НЕ ПЛАТИТ</div>
+              </div>
+              <div className="text-3xl font-black text-emerald-300">{winner.name} 🎉</div>
+              <div className="text-stone-400 text-sm">вытащил счастливый билет</div>
+            </div>
+            <div className="bg-stone-800 rounded-2xl p-4 mb-4">
+              <div className="text-center mb-3">
+                <div className="text-stone-400 text-xs uppercase tracking-widest mb-1">С каждого</div>
+                <div className="text-5xl font-black text-amber-300">{Math.ceil(perPerson)} ₽</div>
+                <div className="text-stone-500 text-xs mt-1">итого {total.toLocaleString('ru-RU')} ₽ / {payers.length} чел.</div>
+              </div>
+              <div className="space-y-2">
+                {payers.map(p=>(
+                  <div key={p.charId} className="flex items-center gap-3 bg-stone-700 rounded-xl px-3 py-2">
+                    <img src={`chars/char${p.charId}.jpg`} className="w-8 h-10 object-cover rounded-lg flex-shrink-0" style={{objectPosition:'top'}}/>
+                    <span className="text-white font-bold flex-1">{p.name}</span>
+                    <span className="text-amber-300 font-black text-lg">{Math.ceil(perPerson)} ₽</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button onClick={()=>setWinner(null)} className="w-full py-3 bg-stone-700 text-white rounded-xl font-bold active:scale-95 mb-2">🔄 Крутить снова</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return(
+    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-stone-900 to-emerald-950 flex flex-col p-4">
+      <BackBtn onBack={onBack} light/>
+      <h1 className="text-2xl font-black text-emerald-100 text-center mb-1">💵 Делим счёт</h1>
+      <p className="text-emerald-300 text-xs text-center mb-4 opacity-70">Победитель рулетки не платит</p>
+      <div className="mb-4">
+        <label className="text-emerald-300 text-xs font-bold uppercase tracking-widest block mb-2">Сумма счёта</label>
+        <div className="relative">
+          <input type="number" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value)}
+            placeholder="0"
+            className="w-full bg-stone-800 text-white text-4xl font-black px-4 py-4 rounded-2xl border-2 border-stone-600 outline-none text-center focus:border-emerald-500"/>
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 text-2xl font-black">₽</span>
+        </div>
+        {players.length>=2&&total>0&&(
+          <div className="mt-2 text-center text-stone-400 text-sm">
+            Если без везунчика: <span className="text-amber-300 font-black">{Math.ceil(total/(players.length-1))} ₽</span> с каждого
+          </div>
+        )}
+      </div>
+      <p className="text-emerald-300 text-xs text-center mb-2 opacity-70">Выбери игроков (мин. 2)</p>
+      <AvatarPicker players={players} onToggle={togglePlayer} onRename={renamePlayer} borderColor="border-emerald-400"/>
+      <button onClick={()=>setPhase('spin')} disabled={players.length<2||total<=0}
+        className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black text-xl active:scale-95 disabled:opacity-40 shadow-lg mt-4">
+        КРУТИТЬ РУЛЕТКУ
+      </button>
+    </div>
+  );
+}
+
 /* ═══════════════ APP ROOT ═══════════════ */
 function App(){
   const[game,setGame]=useState(null);
@@ -718,6 +836,7 @@ function App(){
   if(game==='ktoiznas')return<KtoIzNasGame onBack={back}/>;
   if(game==='svetofor')return<SvetoforGame onBack={back}/>;
   if(game==='knb')return<KNBGame onBack={back}/>;
+  if(game==='bill')return<BillGame onBack={back}/>;
   return<HomeScreen onSelect={setGame}/>;
 }
 
