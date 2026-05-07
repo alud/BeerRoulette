@@ -24,6 +24,8 @@
 .slide-up{animation:slide-up 0.3s ease-out;}
 @keyframes pop{0%{transform:scale(0.8);opacity:0}100%{transform:scale(1);opacity:1}}
 .pop{animation:pop 0.25s ease-out;}
+@keyframes redflash{0%,100%{opacity:0}50%{opacity:0.55}}
+.redflash{animation:redflash var(--blink-speed,0.5s) infinite;}
 body{font-family:system-ui,-apple-system,sans-serif;touch-action:manipulation;}
 input{-webkit-appearance:none;}
 * {-webkit-tap-highlight-color:transparent;}
@@ -285,21 +287,25 @@ function BombaGame({onBack}){
     </div>
   );
 
-  if(phase==='ticking') return(
-    <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors duration-500 ${danger?'bg-red-950':'bg-stone-950'}`}>
-      <div className={`text-8xl mb-6 ${danger?'animate-bounce':''}`} style={{filter:danger?'drop-shadow(0 0 20px red)':'none'}}>🧨</div>
-      <div className={`text-8xl font-black mb-4 tabular-nums ${danger?'text-red-400':'text-white'}`}>{timeLeft}</div>
+  if(phase==='ticking'){
+    const blinkSpeed=Math.max(0.12,timeLeft*0.055)+'s';
+    return(
+    <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors duration-500 ${danger?'bg-red-950':'bg-stone-950'} relative overflow-hidden`}>
+      {danger&&<div className="fixed inset-0 bg-red-500 pointer-events-none redflash z-10" style={{'--blink-speed':blinkSpeed}}/>}
+      <div className={`text-8xl mb-6 relative z-20 ${danger?'animate-bounce':''}`} style={{filter:danger?'drop-shadow(0 0 30px red)':'none'}}>🧨</div>
+      {!danger&&<div className="text-8xl font-black mb-4 tabular-nums text-white">{timeLeft}</div>}
+      {danger&&<div className="text-8xl font-black mb-4">❓</div>}
       {/* progress bar */}
-      <div className="w-64 h-3 bg-stone-800 rounded-full mb-8 overflow-hidden">
+      <div className="w-64 h-3 bg-stone-800 rounded-full mb-8 overflow-hidden relative z-20">
         <div className={`h-full rounded-full transition-all duration-1000 ${danger?'bg-red-500':'bg-amber-400'}`} style={{width:progress+'%'}}/>
       </div>
-      <button onClick={()=>{/* передать — просто визуальный сигнал */}}
-        className={`w-64 py-6 rounded-3xl font-black text-3xl active:scale-95 shadow-2xl transition-colors ${danger?'bg-red-500 text-white':'bg-amber-400 text-stone-900'}`}>
+      <button onClick={()=>{}}
+        className={`w-64 py-6 rounded-3xl font-black text-3xl active:scale-95 shadow-2xl transition-colors relative z-20 ${danger?'bg-red-500 text-white':'bg-amber-400 text-stone-900'}`}>
         📲 ПЕРЕДАЙ!
       </button>
-      <p className="text-stone-500 text-xs mt-6">Нажимай «передай» каждый раз когда берёшь телефон</p>
+      <p className="text-stone-500 text-xs mt-6 relative z-20">Нажимай «передай» каждый раз когда берёшь телефон</p>
     </div>
-  );
+  );};
 
   return(
     <div className="min-h-screen bg-gradient-to-br from-red-950 via-stone-900 to-red-950 flex flex-col items-center justify-center p-6 text-center">
