@@ -954,11 +954,12 @@ function OnlineSetup({onBack,onDone}){
     firebase.database().ref('users/'+getPlayerId()).get().then(snap=>{
       if(snap.exists()){
         const p=snap.val();
-        if(p.name)setName(p.name);
-        if(p.charIdx){setAvatarType('preset');setCharIdx(p.charIdx);}
+        if(p.charIdx){setAvatarType('preset');setCharIdx(p.charIdx);if(!p.name)setName(CHAR_NAMES[p.charIdx-1]);}
         else{setAvatarType('custom');if(p.gender)setGender(p.gender);if(p.faceIdx!=null)setFaceIdx(p.faceIdx);}
+        if(p.name)setName(p.name);
         if(rp&&rp.length===4){setCode(rp.toUpperCase());setStep('joining');}
       } else {
+        setName(CHAR_NAMES[0]);
         if(rp&&rp.length===4){setCode(rp.toUpperCase());}
       }
       setProfileLoading(false);
@@ -1053,7 +1054,7 @@ function OnlineSetup({onBack,onDone}){
       {avatarType==='preset'&&(
         <div className="grid grid-cols-4 gap-2 mb-4">
           {[1,2,3,4,5,6,7,8].map(i=>(
-            <button key={i} onClick={()=>{setCharIdx(i);if(!name)setName(CHAR_NAMES[i-1]);}}
+            <button key={i} onClick={()=>{setCharIdx(i);if(!name||CHAR_NAMES.includes(name))setName(CHAR_NAMES[i-1]);}}
               className={'rounded-2xl overflow-hidden border-4 transition-all '+(charIdx===i?'border-amber-400 scale-105 shadow-lg shadow-amber-900':'border-stone-700 opacity-60')}>
               <img src={`chars/char${i}.jpg`} className="w-full" style={{aspectRatio:'3/4',objectFit:'cover',objectPosition:'top'}}/>
               <div className="bg-stone-900 text-center text-xs text-stone-300 py-0.5 truncate px-1">{CHAR_NAMES[i-1]}</div>
