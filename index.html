@@ -1597,7 +1597,10 @@ function OnlineGameRouter({code,playerId,isHost,onBack,onLeaveRoom}){
 
 /* ═══════════════ APP ═══════════════ */
 function App(){
-  const[mode,setMode]=useState(null);
+  const[mode,setMode]=useState(()=>{
+    const rp=new URLSearchParams(window.location.search).get('room');
+    return(rp&&rp.length===4)?'online':null;
+  });
   const[room,setRoom]=useState(null);
   const[game,setGame]=useState(null);
 
