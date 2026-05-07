@@ -1132,7 +1132,15 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
     setCopied(true);setTimeout(()=>setCopied(false),2000);
   }
   function startGame(){
-    firebase.database().ref('rooms/'+code+'/game').set(selectedGame);
+    const db=firebase.database();
+    let gs={};
+    if(selectedGame==='roulette'){gs={phase:'playing',bulletIdx:Math.floor(Math.random()*6),revealed:{},loser:null};}
+    else if(selectedGame==='bomba'){gs={phase:'setup',duration:30,currentHolder:null,explodedPlayer:null};}
+    else if(selectedGame==='names'){gs={phase:'idle',winnerIdx:null};}
+    else if(selectedGame==='ktoiznas'){gs={phase:'voting',questionIdx:Math.floor(Math.random()*QUESTIONS.length),votes:{}};}
+    else if(selectedGame==='svetofor'){gs={phase:'ready',loser:null};}
+    else if(selectedGame==='knb'){gs={phase:'picking',picks:{},round:1};}
+    db.ref('rooms/'+code).update({game:selectedGame,gameState:gs});
   }
 
   const players=room?Object.entries(room.players||{}).map(([id,p])=>({id,...p})).sort((a,b)=>a.joinedAt-b.joinedAt):[];
@@ -1193,6 +1201,328 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
   );
 }
 
+/* ═══════════════ ONLINE GAMES ═══════════════ */
+function BackToLobbyBtn({onBack}){return <button onClick={onBack} className="text-stone-400 text-sm mb-4 block">← Лобби</button>;}
+
+function OnlineRouletteGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+  const{phase='playing',bulletIdx=0,revealed={},loser=null}=gameState;
+  const loserPlayer=loser?players.find(p=>p.id===loser):null;
+  function pick(idx){
+    if(revealed[idx]||phase!=='playing')return;
+    const nr={...revealed,[idx]:playerId};
+    if(idx===bulletIdx){updateState({revealed:nr,loser:playerId,phase:'result'});}
+    else if(Object.keys(nr).length===5){updateState({revealed:nr,phase:'result',loser:null});}
+    else{updateState({revealed:nr});}
+  }
+  function restart(){updateState({phase:'playing',bulletIdx:Math.floor(Math.random()*6),revealed:{},loser:null});}
+  return(
+    <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
+      <BackToLobbyBtn onBack={onBack}/>
+      <h2 className="text-xl font-black text-white mb-3">🍺 Пивная рулетка</h2>
+      <div className="grid grid-cols-3 gap-3 mb-4 flex-1">
+        {[0,1,2,3,4,5].map(idx=>{
+          const revId=revealed[idx];const isRev=!!revId;const showRes=isRev||phase==='result';const isLose=idx===bulletIdx;
+          const revP=revId?players.find(p=>p.id===revId):null;
+          return(<button key={idx} onClick={()=>pick(idx)} disabled={isRev||phase!=='playing'}
+            className={'aspect-square rounded-2xl transition-all duration-300 p-2 relative border-2 '+(!showRes?'bg-gradient-to-br from-stone-700 to-stone-900 active:scale-95 border-amber-700':isLose?'bg-gradient-to-br from-red-800 to-stone-900 border-red-500':'bg-gradient-to-br from-amber-500 to-amber-700 border-amber-300')}>
+            {!showRes&&<div className="flex items-center justify-center h-full"><span className="text-3xl text-amber-200 opacity-40 font-mono font-bold">{idx+1}</span></div>}
+            {showRes&&(isLose?<BrokenMug/>:<BeerMug/>)}
+            {revP&&<div className="absolute bottom-0 inset-x-0 text-center text-xs text-white bg-black bg-opacity-50 rounded-b-2xl py-0.5 truncate px-1">{revP.name}</div>}
+          </button>);
+        })}
+      </div>
+      {phase==='result'&&(
+        <div className={'rounded-2xl p-4 text-center mb-3 '+(loserPlayer?'bg-red-950 border border-red-600':'bg-amber-950 border border-amber-600')}>
+          {loserPlayer&&<><div className="flex justify-center mb-2"><PlayerAvatar player={loserPlayer} size="lg"/></div><div className="text-white font-black text-xl">{loserPlayer.name} пьёт штрафную! 💥</div></>}
+          {!loserPlayer&&<div className="text-amber-300 font-black text-xl">🎉 Все кружки целы!</div>}
+        </div>
+      )}
+      {phase==='result'&&isHost&&(<div className="flex gap-3">
+        <button onClick={restart} className="flex-1 py-3 bg-amber-500 text-stone-900 rounded-xl font-bold active:scale-95">🔄 Ещё раз</button>
+        <button onClick={endGame} className="py-3 px-4 bg-stone-800 text-stone-400 rounded-xl font-bold active:scale-95">Лобби</button>
+      </div>)}
+    </div>
+  );
+}
+
+function OnlineBombaGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+  const{phase='setup',duration=30,startTime,currentHolder,explodedPlayer}=gameState;
+  const[timeLeft,setTimeLeft]=useState(duration);
+  const myTurn=currentHolder===playerId;
+  const explodedRef=useRef(false);
+  useEffect(()=>{
+    if(phase!=='ticking')return;
+    explodedRef.current=false;
+    const id=setInterval(()=>{
+      const left=Math.max(0,duration-(Date.now()-startTime)/1000);
+      setTimeLeft(Math.ceil(left));
+      if(left<=0&&!explodedRef.current&&currentHolder===playerId){
+        explodedRef.current=true;
+        updateState({phase:'exploded',explodedPlayer:playerId});
+      }
+    },200);
+    return()=>clearInterval(id);
+  },[phase,startTime,currentHolder]);
+  function startBomb(){
+    const holder=players[Math.floor(Math.random()*players.length)].id;
+    updateState({phase:'ticking',startTime:Date.now(),currentHolder:holder,explodedPlayer:null,duration});
+  }
+  function pass(){
+    const i=players.findIndex(p=>p.id===currentHolder);
+    updateState({currentHolder:players[(i+1)%players.length].id});
+  }
+  const holderPlayer=players.find(p=>p.id===currentHolder);
+  const explodedP=explodedPlayer?players.find(p=>p.id===explodedPlayer):null;
+  const danger=timeLeft<=10&&phase==='ticking';
+  if(phase==='setup')return(
+    <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center p-6 text-center">
+      <div className="absolute top-4 left-4"><BackToLobbyBtn onBack={onBack}/></div>
+      <div className="text-8xl mb-6">🧨</div><h2 className="text-2xl font-black text-white mb-6">Бомба</h2>
+      {isHost&&<button onClick={startBomb} className="w-full max-w-xs py-5 bg-red-600 text-white rounded-2xl font-black text-xl active:scale-95">🔥 Поджечь!</button>}
+      {!isHost&&<p className="text-stone-500">Ждём хоста...</p>}
+    </div>
+  );
+  if(phase==='exploded')return(
+    <div className="min-h-screen bg-red-950 flex flex-col items-center justify-center p-6 text-center">
+      <div className="text-8xl mb-4 boom">💥</div>
+      {explodedP&&<><div className="flex justify-center mb-3"><PlayerAvatar player={explodedP} size="lg"/></div><div className="text-white font-black text-2xl">{explodedP.name} пьёт! 🍺</div></>}
+      {isHost&&<div className="flex gap-3 mt-6">
+        <button onClick={()=>updateState({phase:'setup',currentHolder:null,explodedPlayer:null})} className="px-5 py-3 bg-amber-600 text-white rounded-xl font-bold active:scale-95">Ещё раз</button>
+        <button onClick={endGame} className="px-5 py-3 bg-stone-800 text-stone-400 rounded-xl font-bold active:scale-95">Лобби</button>
+      </div>}
+    </div>
+  );
+  return(
+    <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center relative overflow-hidden ${danger?'bg-red-950':'bg-stone-950'}`}>
+      {danger&&<div className="fixed inset-0 bg-red-500 pointer-events-none redflash z-10" style={{'--blink-speed':Math.max(0.12,timeLeft*0.05)+'s'}}/>}
+      <div className="relative z-20 w-full">
+        {myTurn?(<>
+          <div className="text-8xl mb-4 animate-bounce">🧨</div>
+          <div className="text-2xl font-black text-white mb-2">У тебя бомба!</div>
+          {!danger&&<div className="text-7xl font-black text-red-400 mb-6 tabular-nums">{timeLeft}</div>}
+          {danger&&<div className="text-7xl mb-6">❓</div>}
+          <button onClick={pass} className="w-full max-w-xs py-4 bg-amber-500 text-stone-900 rounded-2xl font-black text-xl active:scale-95">Передать →</button>
+        </>):(<>
+          <div className="text-5xl mb-4">😰</div>
+          <div className="text-stone-400 mb-1">Бомба у</div>
+          {holderPlayer&&<div className="text-2xl font-black text-white mb-3">{holderPlayer.name}</div>}
+          {holderPlayer&&<div className="flex justify-center mb-3"><PlayerAvatar player={holderPlayer} size="lg"/></div>}
+          {!danger&&<div className="text-5xl font-black text-red-400 tabular-nums">{timeLeft}</div>}
+          {danger&&<div className="text-5xl">❓</div>}
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+function OnlineNamesGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+  const{phase='idle',winnerIdx=null}=gameState;
+  const winner=winnerIdx!=null?players[winnerIdx%players.length]:null;
+  function spin(){
+    const wi=Math.floor(Math.random()*players.length);
+    updateState({phase:'spinning',winnerIdx:wi});
+    setTimeout(()=>updateState({phase:'result'}),2500);
+  }
+  return(
+    <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
+      <BackToLobbyBtn onBack={onBack}/>
+      <h2 className="text-xl font-black text-white mb-4">🎰 Рулетка имён</h2>
+      <div className="bg-stone-900 rounded-2xl p-3 mb-4 flex-1 overflow-auto">
+        <div className="grid grid-cols-2 gap-2">
+          {players.map((p,i)=>(
+            <div key={p.id} className={`flex items-center gap-2 rounded-xl p-2.5 transition-all duration-500 ${phase==='result'&&winnerIdx===i?'bg-amber-500':'bg-stone-800'} ${phase==='spinning'?'animate-pulse':''}`}>
+              <PlayerAvatar player={p} size="sm"/>
+              <span className={`font-bold text-sm ${phase==='result'&&winnerIdx===i?'text-stone-900':'text-white'}`}>{p.name}</span>
+              {phase==='result'&&winnerIdx===i&&<span className="ml-auto text-lg">🍺</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+      {phase==='result'&&winner&&(<div className="bg-amber-950 border border-amber-600 rounded-2xl p-4 text-center mb-3">
+        <div className="flex justify-center mb-2"><PlayerAvatar player={winner} size="lg"/></div>
+        <div className="text-white font-black text-xl">{winner.name} пьёт! 🍺</div>
+      </div>)}
+      {phase==='spinning'&&<div className="text-center text-amber-300 text-2xl animate-pulse mb-3">🎲 Крутится...</div>}
+      {isHost&&(<div className="flex gap-3">
+        <button onClick={spin} disabled={phase==='spinning'} className="flex-1 py-4 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-2xl font-black text-lg active:scale-95 disabled:opacity-50">🎰 Крутить!</button>
+        {phase==='result'&&<button onClick={endGame} className="py-4 px-4 bg-stone-800 text-stone-400 rounded-2xl font-bold active:scale-95">Лобби</button>}
+      </div>)}
+      {!isHost&&phase==='idle'&&<p className="text-center text-stone-500 text-sm">Хост крутит колесо...</p>}
+    </div>
+  );
+}
+
+function OnlineKtoIzNasGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+  const{phase='voting',questionIdx=0,votes={}}=gameState;
+  const question=QUESTIONS[questionIdx%QUESTIONS.length];
+  const myVote=votes[playerId];
+  const totalVotes=Object.keys(votes).length;
+  const allVoted=totalVotes>=players.length;
+  function vote(targetId){if(myVote)return;updateState({['votes/'+playerId]:targetId});}
+  function showResult(){updateState({phase:'result'});}
+  function next(){updateState({phase:'voting',questionIdx:(questionIdx+1)%QUESTIONS.length,votes:{}});}
+  const voteCounts={};
+  Object.values(votes).forEach(id=>{voteCounts[id]=(voteCounts[id]||0)+1;});
+  const maxV=Math.max(0,...Object.values(voteCounts));
+  const winners=maxV>0?players.filter(p=>voteCounts[p.id]===maxV):[];
+  return(
+    <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
+      <div className="flex justify-between items-start mb-3"><BackToLobbyBtn onBack={onBack}/><span className="text-stone-500 text-xs">{questionIdx+1}/{QUESTIONS.length}</span></div>
+      <div className="bg-gradient-to-br from-blue-900 to-blue-950 border border-blue-600 rounded-2xl p-4 mb-4">
+        <p className="text-blue-300 text-xs mb-1 uppercase tracking-widest">Кто из вас...</p>
+        <p className="text-white font-black text-lg leading-snug">{question}</p>
+        <p className="text-blue-300 text-xs mt-2">Проголосовало: {totalVotes}/{players.length}</p>
+      </div>
+      {phase==='voting'&&!myVote&&(<div className="grid grid-cols-2 gap-3 flex-1">
+        {players.map(p=>(<button key={p.id} onClick={()=>vote(p.id)} className="flex flex-col items-center bg-stone-800 rounded-2xl p-3 active:scale-95 border-2 border-stone-700 hover:border-blue-500 transition-all">
+          <PlayerAvatar player={p} size="md"/>
+          <span className="text-white font-bold text-sm mt-2 text-center">{p.name}</span>
+        </button>))}
+      </div>)}
+      {phase==='voting'&&myVote&&(<div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
+        <div className="text-4xl animate-pulse">⏳</div>
+        <p className="text-white font-bold">Ты проголосовал</p>
+        <p className="text-stone-400 text-sm">Ждём остальных...</p>
+        {allVoted&&isHost&&<button onClick={showResult} className="px-6 py-3 bg-amber-500 text-stone-900 rounded-xl font-bold active:scale-95">Показать результат →</button>}
+      </div>)}
+      {phase==='result'&&(<div className="flex-1 flex flex-col">
+        <div className="space-y-2 flex-1 overflow-auto">
+          {[...players].sort((a,b)=>(voteCounts[b.id]||0)-(voteCounts[a.id]||0)).map(p=>{
+            const isW=winners.find(w=>w.id===p.id);
+            return(<div key={p.id} className={`flex items-center gap-3 rounded-xl p-3 ${isW?'bg-amber-900 border border-amber-500':'bg-stone-800'}`}>
+              <PlayerAvatar player={p} size="sm"/>
+              <span className="text-white font-bold flex-1">{p.name}</span>
+              {isW&&<span className="text-lg">👑</span>}
+              <span className="text-amber-400 font-black text-lg">{voteCounts[p.id]||0}</span>
+            </div>);
+          })}
+        </div>
+        {isHost&&(<div className="flex gap-3 mt-4">
+          <button onClick={next} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold active:scale-95">Следующий →</button>
+          <button onClick={endGame} className="py-3 px-4 bg-stone-800 text-stone-400 rounded-xl font-bold active:scale-95">Лобби</button>
+        </div>)}
+      </div>)}
+    </div>
+  );
+}
+
+function OnlineSvetoforGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+  const{phase='ready',loser=null}=gameState;
+  const loserPlayer=loser?players.find(p=>p.id===loser):null;
+  function roll(){updateState({phase:'result',loser:players[Math.floor(Math.random()*players.length)].id});}
+  function reset(){updateState({phase:'ready',loser:null});}
+  return(
+    <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center p-6 text-center relative">
+      <div className="absolute top-4 left-4"><BackToLobbyBtn onBack={onBack}/></div>
+      <h2 className="text-2xl font-black text-white mb-6">🚦 Светофор</h2>
+      {phase==='ready'&&(<>
+        <div className="text-8xl mb-8 animate-pulse">🚦</div>
+        <p className="text-stone-400 mb-6">Кто выпьет на этот раз?</p>
+        {isHost&&<button onClick={roll} className="px-10 py-5 bg-green-600 text-white rounded-2xl font-black text-2xl active:scale-95 shadow-xl">🟢 Поехали!</button>}
+        {!isHost&&<p className="text-stone-500">Хост запускает...</p>}
+      </>)}
+      {phase==='result'&&loserPlayer&&(<>
+        <div className="text-6xl mb-4">🔴</div>
+        <div className="flex justify-center mb-3"><PlayerAvatar player={loserPlayer} size="lg"/></div>
+        <div className="text-white font-black text-2xl">{loserPlayer.name}</div>
+        <div className="text-red-400 font-bold text-lg mt-1 mb-6">Пьёт! 🍺</div>
+        {isHost&&<div className="flex gap-3">
+          <button onClick={reset} className="px-5 py-3 bg-stone-800 text-white rounded-xl font-bold active:scale-95">Ещё раз</button>
+          <button onClick={endGame} className="px-5 py-3 bg-stone-700 text-stone-400 rounded-xl font-bold active:scale-95">Лобби</button>
+        </div>}
+      </>)}
+    </div>
+  );
+}
+
+function OnlineKNBGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+  const{phase='picking',picks={},round=1}=gameState;
+  const SYM={r:'✊',p:'✋',s:'✌️'};const NM={r:'Камень',p:'Бумага',s:'Ножницы'};
+  const myPick=picks[playerId];
+  const allPicked=players.length>0&&players.every(p=>picks[p.id]);
+  function pick(c){if(myPick||phase!=='picking')return;updateState({['picks/'+playerId]:c});}
+  useEffect(()=>{if(allPicked&&phase==='picking'&&isHost)updateState({phase:'result'});},[allPicked]);
+  function getWinChoice(){
+    const present=[...new Set(players.map(p=>picks[p.id]).filter(Boolean))];
+    if(present.length!==2)return null;
+    const[a,b]=present;
+    return((a==='r'&&b==='s')||(a==='s'&&b==='p')||(a==='p'&&b==='r'))?a:b;
+  }
+  const winChoice=phase==='result'?getWinChoice():null;
+  return(
+    <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
+      <div className="flex justify-between items-center mb-3"><BackToLobbyBtn onBack={onBack}/><span className="text-stone-500 text-xs font-bold">Раунд {round}</span></div>
+      <h2 className="text-xl font-black text-white mb-4 text-center">✊ КНБ на пьянку</h2>
+      {phase==='picking'&&(<>
+        {!myPick?(<>
+          <p className="text-stone-400 text-center mb-4">Твой выбор:</p>
+          <div className="flex justify-center gap-4 mb-6">
+            {['r','p','s'].map(c=>(<button key={c} onClick={()=>pick(c)} className="w-24 h-24 bg-stone-800 rounded-2xl text-5xl flex items-center justify-center active:scale-95 border-2 border-stone-700 hover:border-amber-500 transition-all">{SYM[c]}</button>))}
+          </div>
+        </>):(<div className="flex flex-col items-center justify-center py-6 mb-4">
+          <div className="text-6xl mb-2">{SYM[myPick]}</div>
+          <p className="text-white font-bold">{NM[myPick]}</p>
+          <p className="text-stone-400 text-sm mt-1 animate-pulse">Ждём остальных...</p>
+        </div>)}
+        <div className="mt-auto space-y-2">
+          {players.map(p=>(<div key={p.id} className="flex items-center gap-2 bg-stone-900 rounded-xl px-3 py-2">
+            <PlayerAvatar player={p} size="sm"/>
+            <span className="text-white text-sm flex-1">{p.name}</span>
+            <span className={`text-sm ${picks[p.id]?'text-green-400':'text-stone-600'}`}>{picks[p.id]?'✓':'...'}</span>
+          </div>))}
+        </div>
+      </>)}
+      {phase==='result'&&(<div className="flex-1 flex flex-col">
+        <div className="space-y-3 mb-4">
+          {players.map(p=>{const isW=winChoice&&picks[p.id]===winChoice;const isDraw=!winChoice;
+            return(<div key={p.id} className={`flex items-center gap-3 rounded-2xl p-4 border-2 ${isDraw?'bg-stone-800 border-stone-600':isW?'bg-amber-900 border-amber-400':'bg-red-950 border-red-800'}`}>
+              <PlayerAvatar player={p} size="md"/>
+              <div className="flex-1"><div className="text-white font-bold">{p.name}</div><div className="text-stone-300 text-sm">{picks[p.id]?NM[picks[p.id]]:'—'}</div></div>
+              <div className="text-4xl">{picks[p.id]?SYM[picks[p.id]]:'?'}</div>
+              {isW&&<span className="text-lg">🏆</span>}{!isDraw&&!isW&&<span className="text-lg">🍺</span>}
+            </div>);
+          })}
+        </div>
+        {!winChoice&&<div className="text-center text-white font-black text-xl mb-4">🤝 Ничья!</div>}
+        {isHost&&(<div className="flex gap-3 mt-auto">
+          <button onClick={()=>updateState({phase:'picking',picks:{},round:round+1})} className="flex-1 py-3 bg-amber-500 text-stone-900 rounded-xl font-bold active:scale-95">Ещё раунд</button>
+          <button onClick={endGame} className="py-3 px-4 bg-stone-800 text-stone-400 rounded-xl font-bold active:scale-95">Лобби</button>
+        </div>)}
+      </div>)}
+    </div>
+  );
+}
+
+/* —— РОУТЕР ОНЛАЙН-ИГР —— */
+function OnlineGameRouter({code,playerId,isHost,onBack}){
+  const[room,setRoom]=useState(null);
+  useEffect(()=>{
+    const db=firebase.database();
+    const ref=db.ref('rooms/'+code);
+    ref.on('value',snap=>{
+      const val=snap.val();
+      if(!val||!val.game){onBack();return;}
+      setRoom(val);
+    });
+    return()=>ref.off();
+  },[]);
+  if(!room)return<div className="min-h-screen bg-stone-950 flex items-center justify-center"><div className="text-white animate-pulse">Загрузка...</div></div>;
+  const db=firebase.database();
+  const players=Object.entries(room.players||{}).map(([id,p])=>({id,...p})).sort((a,b)=>a.joinedAt-b.joinedAt);
+  const gameState=room.gameState||{};
+  function updateState(u){db.ref('rooms/'+code+'/gameState').update(u);}
+  function endGame(){db.ref('rooms/'+code+'/game').set(null);db.ref('rooms/'+code+'/gameState').set(null);}
+  const props={gameState,players,playerId,isHost,code,updateState,endGame,onBack};
+  const g=room.game;
+  if(g==='roulette')return<OnlineRouletteGame {...props}/>;
+  if(g==='bomba')return<OnlineBombaGame {...props}/>;
+  if(g==='names')return<OnlineNamesGame {...props}/>;
+  if(g==='ktoiznas')return<OnlineKtoIzNasGame {...props}/>;
+  if(g==='svetofor')return<OnlineSvetoforGame {...props}/>;
+  if(g==='knb')return<OnlineKNBGame {...props}/>;
+  return null;
+}
+
 /* ═══════════════ APP ═══════════════ */
 function App(){
   const[mode,setMode]=useState(null);
@@ -1203,16 +1533,8 @@ function App(){
 
   if(mode==='online'){
     if(!room)return<OnlineSetup onBack={()=>setMode(null)} onDone={setRoom}/>;
-    const back=()=>setGame(null);
     if(!game)return<LobbyScreen {...room} onBack={()=>setRoom(null)} onStart={g=>setGame(g)}/>;
-    if(game==='roulette')return<RouletteGame onBack={back}/>;
-    if(game==='bomba')return<BombaGame onBack={back}/>;
-    if(game==='names')return<NamesGame onBack={back}/>;
-    if(game==='ktoiznas')return<KtoIzNasGame onBack={back}/>;
-    if(game==='svetofor')return<SvetoforGame onBack={back}/>;
-    if(game==='knb')return<KNBGame onBack={back}/>;
-    if(game==='bill')return<BillGame onBack={back}/>;
-    return<LobbyScreen {...room} onBack={()=>setRoom(null)} onStart={g=>setGame(g)}/>;
+    return<OnlineGameRouter {...room} onBack={()=>setGame(null)}/>;
   }
 
   const back=()=>setGame(null);
