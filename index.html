@@ -449,14 +449,12 @@ const QUESTIONS=[
 ];
 
 function KtoIzNasGame({onBack}){
-  const[phase,setPhase]=useState('setup');
+  const[phase,setPhase]=useState('setup'); // setup | pass | vote | result
   const[players,setPlayers]=useState([]);
   const[qIdx,setQIdx]=useState(0);
   const[questions,setQuestions]=useState(()=>[...QUESTIONS].sort(()=>Math.random()-0.5));
   const[voterIdx,setVoterIdx]=useState(0);
   const[votes,setVotes]=useState({});
-  const[passing,setPassing]=useState(false);
-  const[showResult,setShowResult]=useState(false);
 
   function togglePlayer(id){
     if(players.find(p=>p.charId===id)){setPlayers(players.filter(p=>p.charId!==id));}
@@ -465,27 +463,32 @@ function KtoIzNasGame({onBack}){
   function renamePlayer(id,name){setPlayers(players.map(p=>p.charId===id?{...p,name}:p));}
 
   function startGame(){
-    setPhase('game');setVoterIdx(0);setVotes({});setShowResult(false);setQIdx(0);
+    setVoterIdx(0);setVotes({});setQIdx(0);
     setQuestions([...QUESTIONS].sort(()=>Math.random()-0.5));
+    setPhase('pass');
   }
 
   function vote(key){
-    const nv={...votes,[key]:(votes[key]||0)+1};setVotes(nv);
-    if(voterIdx+1>=players.length){setShowResult(true);}
-    else{setPassing(true);setTimeout(()=>{setPassing(false);setVoterIdx(v=>v+1);},1400);}
+    const nv={...votes,[key]:(votes[key]||0)+1};
+    setVotes(nv);
+    if(voterIdx+1>=players.length){setPhase('result');}
+    else{setVoterIdx(v=>v+1);setPhase('pass');}
   }
 
-  function nextQuestion(){setVoterIdx(0);setVotes({});setShowResult(false);setQIdx(i=>(i+1)%questions.length);}
+  function nextQuestion(){
+    setVoterIdx(0);setVotes({});
+    setQIdx(i=>(i+1)%questions.length);
+    setPhase('pass');
+  }
 
   const curVoter=players[voterIdx];
-  const nextVoter=players[voterIdx+1];
-  const winnerEntry=showResult?Object.entries(votes).sort((a,b)=>b[1]-a[1])[0]:null;
+  const winnerEntry=phase==='result'?Object.entries(votes).sort((a,b)=>b[1]-a[1])[0]:null;
   const winnerPlayer=winnerEntry?players.find(p=>p.name===winnerEntry[0]):null;
-  const tie=showResult&&winnerEntry&&Object.values(votes).filter(v=>v===winnerEntry[1]).length>1;
+  const tie=winnerEntry&&Object.values(votes).filter(v=>v===winnerEntry[1]).length>1;
   const cols=players.length<=4?'grid-cols-2':'grid-cols-4';
 
   if(phase==='setup') return(
-    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-stone-900 to-blue-950 flex flex-col p-4">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-blue-950 to-indigo-950 flex flex-col p-4">
       <BackBtn onBack={onBack} light/>
       <h1 className="text-2xl font-black text-blue-100 text-center mb-1">🤔 Кто из нас?</h1>
       <p className="text-blue-300 text-xs text-center mb-3 opacity-70">Выбери игроков (мин. 2) · тапни чтобы переименовать</p>
@@ -497,51 +500,71 @@ function KtoIzNasGame({onBack}){
     </div>
   );
 
-  return(
-    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-stone-900 to-blue-950 flex flex-col p-4 relative">
-      <BackBtn onBack={()=>setPhase('setup')} light/>
-      <div className="bg-blue-900 bg-opacity-60 border border-blue-700 rounded-2xl p-4 mb-3 text-center">
-        <p className="text-blue-200 text-xs uppercase tracking-widest mb-1 opacity-60">Вопрос {qIdx+1}</p>
-        <p className="text-white text-base font-bold leading-snug">{questions[qIdx]}</p>
+  // Передача телефона — как в КНБ
+  if(phase==='pass'&&curVoter) return(
+    <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center p-6 text-center">
+      <div className="text-6xl mb-5">📲</div>
+      <p className="text-stone-400 text-lg mb-4">Передай телефон</p>
+      <div className="relative mb-3">
+        <img src={`chars/char${curVoter.charId}.jpg`} className="w-28 h-36 object-cover rounded-2xl mx-auto border-4 border-blue-500 shadow-2xl" style={{objectPosition:'top'}}/>
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-black px-3 py-1 rounded-full whitespace-nowrap">{voterIdx+1} / {players.length}</div>
       </div>
-      {!showResult&&!passing&&curVoter&&(
-        <>
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <img src={`chars/char${curVoter.charId}.jpg`} className="w-8 h-10 object-cover rounded-lg border border-blue-400" style={{objectPosition:'top'}}/>
-            <p className="text-blue-300 text-sm">Голосует: <span className="text-white font-bold">{curVoter.name}</span> ({voterIdx+1}/{players.length})</p>
-          </div>
-          <div className={`grid ${cols} gap-2 flex-1`}>
-            {players.map((pl,i)=>(
-              <button key={i} onClick={()=>vote(pl.name)}
-                className="flex flex-col items-center py-3 px-2 bg-blue-800 border-2 border-blue-600 rounded-2xl active:scale-95 active:bg-blue-600 transition-colors">
-                <img src={`chars/char${pl.charId}.jpg`} className="w-14 h-18 object-cover rounded-xl mb-1 border border-blue-500" style={{objectPosition:'top',height:'72px'}}/>
-                <span className="text-white font-bold text-xs leading-tight text-center">{pl.name}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {passing&&nextVoter&&(
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center pop">
-            <img src={`chars/char${nextVoter.charId}.jpg`} className="w-24 h-32 object-cover rounded-2xl mx-auto mb-3 border-2 border-blue-400" style={{objectPosition:'top'}}/>
-            <p className="text-white text-xl font-bold">Передай</p>
-            <p className="text-blue-300 text-xl font-bold">{nextVoter.name}</p>
-          </div>
-        </div>
-      )}
-      {showResult&&winnerPlayer&&(
-        <div className="flex-1 flex flex-col items-center justify-center text-center pop">
-          {tie&&<p className="text-blue-300 text-sm mb-2">Ничья!</p>}
-          <img src={`chars/char${winnerPlayer.charId}.jpg`} className="w-28 object-cover rounded-2xl mx-auto mb-3 border-4 border-yellow-400 shadow-xl" style={{height:'140px',objectPosition:'top'}}/>
-          <div className="text-4xl font-black text-yellow-300 mb-1">{winnerPlayer.name}</div>
-          <div className="text-2xl text-white mb-1">пьёт! 🍺</div>
-          <div className="text-blue-400 text-sm mb-5">{winnerEntry[1]} из {players.length} голосов</div>
-          <button onClick={nextQuestion} className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold text-base active:scale-95">Следующий вопрос →</button>
-        </div>
-      )}
+      <p className="text-white text-3xl font-black mt-4 mb-1">{curVoter.name}</p>
+      <p className="text-blue-400 text-sm mb-10 opacity-70">голосует тайно</p>
+      <button onClick={()=>setPhase('vote')}
+        className="w-64 py-5 bg-blue-600 text-white rounded-2xl font-black text-xl active:scale-95 shadow-xl">
+        Я готов →
+      </button>
     </div>
   );
+
+  // Экран голосования
+  if(phase==='vote'&&curVoter) return(
+    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-blue-950 to-indigo-950 flex flex-col p-4">
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={()=>setPhase('setup')} className="text-blue-400 text-sm active:opacity-50">← Стоп</button>
+        <div className="flex items-center gap-2">
+          <img src={`chars/char${curVoter.charId}.jpg`} className="w-7 h-9 object-cover rounded-lg border border-blue-400" style={{objectPosition:'top'}}/>
+          <span className="text-blue-300 text-xs font-bold">{curVoter.name}</span>
+        </div>
+      </div>
+      {/* Вопрос */}
+      <div className="rounded-3xl p-5 mb-4 text-center" style={{background:'linear-gradient(135deg,rgba(37,99,235,0.35),rgba(99,102,241,0.25))',border:'1px solid rgba(99,102,241,0.4)',backdropFilter:'blur(8px)'}}>
+        <p className="text-blue-300 text-xs uppercase tracking-widest mb-2 opacity-70">Вопрос {qIdx+1}</p>
+        <p className="text-white text-lg font-black leading-snug">{questions[qIdx]}</p>
+      </div>
+      {/* Сетка игроков */}
+      <div className={`grid ${cols} gap-3 flex-1`}>
+        {players.map((pl,i)=>(
+          <button key={i} onClick={()=>vote(pl.name)}
+            className="flex flex-col items-center py-4 px-2 rounded-3xl active:scale-95 transition-all relative overflow-hidden"
+            style={{background:'linear-gradient(160deg,rgba(30,58,138,0.8),rgba(49,46,129,0.6))',border:'1.5px solid rgba(99,102,241,0.5)'}}>
+            <img src={`chars/char${pl.charId}.jpg`} className="w-16 object-cover rounded-2xl mb-2 shadow-lg" style={{height:'84px',objectPosition:'top'}}/>
+            <span className="text-white font-black text-sm leading-tight text-center">{pl.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Результат
+  if(phase==='result'&&winnerPlayer) return(
+    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-blue-950 to-indigo-950 flex flex-col items-center justify-center p-6 text-center pop">
+      <p className="text-blue-300 text-xs uppercase tracking-widest mb-3 opacity-60">{questions[qIdx]}</p>
+      {tie&&<div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded-full px-4 py-1 text-yellow-300 text-sm font-bold mb-3">Ничья — пьют все!</div>}
+      <div className="relative mb-4">
+        <img src={`chars/char${winnerPlayer.charId}.jpg`} className="w-32 object-cover rounded-3xl mx-auto border-4 border-yellow-400 shadow-2xl" style={{height:'160px',objectPosition:'top'}}/>
+        <div className="absolute -top-3 -right-3 text-4xl">👑</div>
+      </div>
+      <div className="text-5xl font-black text-yellow-300 mb-1">{winnerPlayer.name}</div>
+      <div className="text-2xl text-white mb-2">пьёт! 🍺</div>
+      <div className="bg-blue-900 bg-opacity-50 rounded-full px-4 py-1 text-blue-300 text-sm mb-8">{winnerEntry[1]} из {players.length} голосов</div>
+      <button onClick={nextQuestion} className="w-full max-w-xs py-4 bg-blue-600 text-white rounded-2xl font-black text-lg active:scale-95 shadow-lg">Следующий вопрос →</button>
+      <button onClick={()=>setPhase('setup')} className="mt-3 text-blue-400 text-sm active:opacity-50">Сменить игроков</button>
+    </div>
+  );
+
+  return null;
 }
 
 /* ═══════════════ 5. СВЕТОФОР ═══════════════ */
