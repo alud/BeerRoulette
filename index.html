@@ -743,7 +743,7 @@ function BillGame({onBack}){
       <div className="w-full max-w-sm">
         <BackBtn onBack={()=>{setPhase('setup');setWinner(null);}} light/>
         <h1 className="text-2xl font-black text-emerald-100 text-center mb-1">💵 Делим счёт</h1>
-        <p className="text-emerald-400 text-sm text-center mb-3 opacity-80">Итого: <span className="font-black text-white">{total.toLocaleString('ru-RU')} ₽</span> · {players.length} чел.</p>
+        <p className="text-emerald-400 text-sm text-center mb-3 opacity-80">Итого: <span className="font-black text-white">{total.toLocaleString('ru-RU')} сум</span> · {players.length} чел.</p>
         <div className="relative flex justify-center mb-4">
           <svg viewBox="0 0 300 300" className="w-72 h-72">
             <polygon points="150,4 141,26 159,26" fill="#fbbf24" stroke="#92400e" strokeWidth="1.5"/>
@@ -776,15 +776,15 @@ function BillGame({onBack}){
             <div className="bg-stone-800 rounded-2xl p-4 mb-4">
               <div className="text-center mb-3">
                 <div className="text-stone-400 text-xs uppercase tracking-widest mb-1">С каждого</div>
-                <div className="text-5xl font-black text-amber-300">{Math.ceil(perPerson)} ₽</div>
-                <div className="text-stone-500 text-xs mt-1">итого {total.toLocaleString('ru-RU')} ₽ / {payers.length} чел.</div>
+                <div className="text-5xl font-black text-amber-300">{Math.ceil(perPerson).toLocaleString('ru-RU')} сум</div>
+                <div className="text-stone-500 text-xs mt-1">итого {total.toLocaleString('ru-RU')} сум / {payers.length} чел.</div>
               </div>
               <div className="space-y-2">
                 {payers.map(p=>(
                   <div key={p.charId} className="flex items-center gap-3 bg-stone-700 rounded-xl px-3 py-2">
                     <img src={`chars/char${p.charId}.jpg`} className="w-8 h-10 object-cover rounded-lg flex-shrink-0" style={{objectPosition:'top'}}/>
                     <span className="text-white font-bold flex-1">{p.name}</span>
-                    <span className="text-amber-300 font-black text-lg">{Math.ceil(perPerson)} ₽</span>
+                    <span className="text-amber-300 font-black text-lg">{Math.ceil(perPerson).toLocaleString('ru-RU')} сум</span>
                   </div>
                 ))}
               </div>
@@ -803,15 +803,29 @@ function BillGame({onBack}){
       <p className="text-emerald-300 text-xs text-center mb-4 opacity-70">Победитель рулетки не платит</p>
       <div className="mb-4">
         <label className="text-emerald-300 text-xs font-bold uppercase tracking-widest block mb-2">Сумма счёта</label>
-        <div className="relative">
-          <input type="number" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value)}
-            placeholder="0"
-            className="w-full bg-stone-800 text-white text-4xl font-black px-4 py-4 rounded-2xl border-2 border-stone-600 outline-none text-center focus:border-emerald-500"/>
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 text-2xl font-black">₽</span>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input type="number" inputMode="numeric" value={amount} onChange={e=>setAmount(e.target.value)}
+              placeholder="0"
+              className="w-full bg-stone-800 text-white text-4xl font-black px-4 py-4 rounded-2xl border-2 border-stone-600 outline-none text-center focus:border-emerald-500"/>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 text-sm font-bold">сум</span>
+          </div>
+          <button onClick={()=>setAmount(a=>a?String(Number(a)*1000):'')}
+            className="bg-stone-700 text-emerald-300 font-black text-xl rounded-2xl px-4 active:scale-95 border-2 border-stone-600">
+            ×1000
+          </button>
+        </div>
+        <div className="flex gap-2 mt-2">
+          {[1000,5000,10000,50000].map(v=>(
+            <button key={v} onClick={()=>setAmount(String(v))}
+              className="flex-1 bg-stone-800 text-stone-300 text-xs font-bold py-2 rounded-xl active:scale-95 border border-stone-700">
+              {v.toLocaleString('ru-RU')}
+            </button>
+          ))}
         </div>
         {players.length>=2&&total>0&&(
           <div className="mt-2 text-center text-stone-400 text-sm">
-            Если без везунчика: <span className="text-amber-300 font-black">{Math.ceil(total/(players.length-1))} ₽</span> с каждого
+            Если без везунчика: <span className="text-amber-300 font-black">{Math.ceil(total/(players.length-1)).toLocaleString('ru-RU')} сум</span> с каждого
           </div>
         )}
       </div>
