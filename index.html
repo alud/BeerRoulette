@@ -1,391 +1,725 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>🍺 Пивная рулетка</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>🍺 Пивные игры</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-@keyframes shake { 0%,100%{transform:translate(0,0)} 10%{transform:translate(-8px,-4px)} 30%{transform:translate(8px,4px)} 50%{transform:translate(-6px,4px)} 70%{transform:translate(6px,-4px)} 90%{transform:translate(-3px,2px)} }
-.animate-shake { animation: shake 0.6s; }
-@keyframes particle-fly { 0%{transform:translate(0,0) rotate(0deg) scale(1);opacity:1} 100%{transform:translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(0);opacity:0} }
-.particle { animation: particle-fly 2s ease-out forwards; }
-@keyframes flash-anim { 0%{opacity:0} 50%{opacity:0.6} 100%{opacity:0} }
-.flash { animation: flash-anim 0.2s; }
-@keyframes muzzle { 0%{opacity:1;transform:scale(0.5)} 100%{opacity:0;transform:scale(2.5)} }
-.muzzle-flash { animation: muzzle 0.18s ease-out forwards; }
-body { font-family: system-ui, -apple-system, sans-serif; }
+@keyframes shake{0%,100%{transform:translate(0,0)}10%{transform:translate(-8px,-4px)}30%{transform:translate(8px,4px)}50%{transform:translate(-6px,4px)}70%{transform:translate(6px,-4px)}90%{transform:translate(-3px,2px)}}
+.shake{animation:shake 0.6s;}
+@keyframes pfly{0%{transform:translate(0,0) rotate(0deg) scale(1);opacity:1}100%{transform:translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(0);opacity:0}}
+.pfly{animation:pfly 2s ease-out forwards;}
+@keyframes flash{0%{opacity:0}50%{opacity:0.7}100%{opacity:0}}
+.flash{animation:flash 0.2s;}
+@keyframes muzzle{0%{opacity:1;transform:scale(0.5)}100%{opacity:0;transform:scale(2.5)}}
+.muzzle{animation:muzzle 0.18s ease-out forwards;}
+@keyframes boom{0%{transform:scale(0.2);opacity:0}50%{transform:scale(1.3);opacity:1}100%{transform:scale(1);opacity:1}}
+.boom{animation:boom 0.5s ease-out forwards;}
+@keyframes tick-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes slide-up{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.slide-up{animation:slide-up 0.3s ease-out;}
+@keyframes pop{0%{transform:scale(0.8);opacity:0}100%{transform:scale(1);opacity:1}}
+.pop{animation:pop 0.25s ease-out;}
+body{font-family:system-ui,-apple-system,sans-serif;touch-action:manipulation;}
+input{-webkit-appearance:none;}
+* {-webkit-tap-highlight-color:transparent;}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
-const { useState } = React;
+const { useState, useEffect, useRef } = React;
 
+/* ═══════════════ AUDIO ═══════════════ */
 function playGunshot() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.6, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) {
-      const t = i / ctx.sampleRate;
-      const env = Math.exp(-t * 18);
-      data[i] = (Math.random() * 2 - 1) * env * (1 + 3 * Math.exp(-t * 60));
-    }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 800;
-    const gain = ctx.createGain(); gain.gain.value = 2.5;
-    src.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
-    src.start();
-  } catch(e) {}
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1,ctx.sampleRate*0.6,ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++){const t=i/ctx.sampleRate;d[i]=(Math.random()*2-1)*Math.exp(-t*18)*(1+3*Math.exp(-t*60));}
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=800;
+    const g=ctx.createGain(); g.gain.value=2.5;
+    src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start();
+  } catch(e){}
+}
+function playTick(freq=800) {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=freq;
+    g.gain.setValueAtTime(0.4,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.06);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime+0.07);
+  } catch(e){}
+}
+function playExplosion() {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const buf=ctx.createBuffer(1,ctx.sampleRate*1,ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++){const t=i/ctx.sampleRate;d[i]=(Math.random()*2-1)*Math.exp(-t*6)*(1+2*Math.exp(-t*20));}
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=400;
+    const g=ctx.createGain(); g.gain.value=3;
+    src.connect(lp); lp.connect(g); g.connect(ctx.destination); src.start();
+  } catch(e){}
 }
 
-function BeerMug() {
-  return (<svg viewBox="0 0 100 100" className="w-full h-full">
-    <defs><linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
-      <stop offset="0%" stopColor="#fde68a"/><stop offset="50%" stopColor="#f59e0b"/><stop offset="100%" stopColor="#b45309"/>
-    </linearGradient></defs>
-    <rect x="22" y="22" width="48" height="60" rx="3" fill="url(#bg)" stroke="#78350f" strokeWidth="1.5"/>
-    <ellipse cx="46" cy="22" rx="24" ry="8" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5"/>
-    <circle cx="35" cy="18" r="5" fill="#fffbeb"/><circle cx="50" cy="15" r="6" fill="#fffbeb"/><circle cx="60" cy="19" r="4" fill="#fffbeb"/>
-    <path d="M 70 35 Q 88 38 88 55 Q 88 72 70 72" fill="none" stroke="#78350f" strokeWidth="4"/>
-    <circle cx="38" cy="50" r="2" fill="#fffbeb" opacity="0.8"/><circle cx="52" cy="62" r="1.5" fill="#fffbeb" opacity="0.8"/><circle cx="46" cy="70" r="2" fill="#fffbeb" opacity="0.8"/>
-  </svg>);
-}
+/* ═══════════════ SHARED MUGS ═══════════════ */
+function BeerMug(){return(<svg viewBox="0 0 100 100" className="w-full h-full"><defs><linearGradient id="bg" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#fde68a"/><stop offset="50%" stopColor="#f59e0b"/><stop offset="100%" stopColor="#b45309"/></linearGradient></defs><rect x="22" y="22" width="48" height="60" rx="3" fill="url(#bg)" stroke="#78350f" strokeWidth="1.5"/><ellipse cx="46" cy="22" rx="24" ry="8" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5"/><circle cx="35" cy="18" r="5" fill="#fffbeb"/><circle cx="50" cy="15" r="6" fill="#fffbeb"/><circle cx="60" cy="19" r="4" fill="#fffbeb"/><path d="M 70 35 Q 88 38 88 55 Q 88 72 70 72" fill="none" stroke="#78350f" strokeWidth="4"/><circle cx="38" cy="50" r="2" fill="#fffbeb" opacity="0.8"/><circle cx="52" cy="62" r="1.5" fill="#fffbeb" opacity="0.8"/><circle cx="46" cy="70" r="2" fill="#fffbeb" opacity="0.8"/></svg>);}
+function BrokenMug(){return(<svg viewBox="0 0 100 100" className="w-full h-full"><ellipse cx="50" cy="80" rx="40" ry="10" fill="#b45309" opacity="0.7"/><ellipse cx="50" cy="78" rx="35" ry="7" fill="#fde68a" opacity="0.5"/><path d="M 18 30 L 28 22 L 32 50 L 22 70 L 12 60 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(-25 22 50)"/><path d="M 60 25 L 78 28 L 80 55 L 68 65 L 62 45 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(20 70 45)"/><path d="M 40 8 L 55 5 L 60 18 L 50 22 L 38 18 Z" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5"/><circle cx="20" cy="55" r="2" fill="#f59e0b"/><circle cx="80" cy="60" r="2.5" fill="#f59e0b"/></svg>);}
 
-function BrokenMug() {
-  return (<svg viewBox="0 0 100 100" className="w-full h-full">
-    <ellipse cx="50" cy="80" rx="40" ry="10" fill="#b45309" opacity="0.7"/>
-    <ellipse cx="50" cy="78" rx="35" ry="7" fill="#fde68a" opacity="0.5"/>
-    <path d="M 18 30 L 28 22 L 32 50 L 22 70 L 12 60 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(-25 22 50)"/>
-    <path d="M 60 25 L 78 28 L 80 55 L 68 65 L 62 45 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(20 70 45)"/>
-    <path d="M 40 8 L 55 5 L 60 18 L 50 22 L 38 18 Z" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5"/>
-    <circle cx="20" cy="55" r="2" fill="#f59e0b"/><circle cx="80" cy="60" r="2.5" fill="#f59e0b"/>
-  </svg>);
-}
+/* ═══════════════ REVOLVERS ═══════════════ */
+function RevolverClassic({rotation,spinning,muzzle}){return(<svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl"><defs><linearGradient id="c1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#c4c9d4"/><stop offset="100%" stopColor="#1f2937"/></linearGradient><linearGradient id="c2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#6b7280"/><stop offset="100%" stopColor="#111827"/></linearGradient><linearGradient id="c3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#92400e"/><stop offset="100%" stopColor="#451a03"/></linearGradient><radialGradient id="c4"><stop offset="0%" stopColor="#374151"/><stop offset="100%" stopColor="#000"/></radialGradient></defs><rect x="148" y="60" width="128" height="22" rx="4" fill="url(#c1)"/><rect x="149" y="61" width="126" height="7" rx="3" fill="rgba(255,255,255,0.15)"/><rect x="148" y="74" width="128" height="6" rx="2" fill="url(#c2)"/><circle cx="273" cy="71" r="7" fill="#0a0a0a" stroke="#374151" strokeWidth="1"/>{muzzle&&<circle cx="278" cy="71" r="16" fill="rgba(255,210,60,0.85)" className="muzzle"/>}<g style={{transformOrigin:'100px 90px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}><circle cx="100" cy="90" r="44" fill="url(#c2)" stroke="#374151" strokeWidth="2"/>{[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=90+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#c4)" stroke="#4b5563" strokeWidth="1.5"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}<circle cx="100" cy="90" r="7" fill="#374151"/></g><path d="M 144 72 L 148 63 L 148 82 L 144 78 Z" fill="url(#c1)"/><path d="M 88 132 Q 88 158 114 158 Q 132 158 132 132" fill="none" stroke="url(#c2)" strokeWidth="7" strokeLinecap="round"/><path d="M 58 90 Q 46 104 46 136 Q 46 170 74 174 L 96 168 Q 102 144 102 132 L 102 106 Z" fill="url(#c3)" stroke="#3b1206" strokeWidth="2"/></svg>);}
+function RevolverGold({rotation,spinning,muzzle}){return(<svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl"><defs><linearGradient id="g1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#fef08a"/><stop offset="45%" stopColor="#eab308"/><stop offset="100%" stopColor="#713f12"/></linearGradient><linearGradient id="g2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#fcd34d"/><stop offset="100%" stopColor="#78350f"/></linearGradient><linearGradient id="g3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#f5f5f4"/><stop offset="100%" stopColor="#a8a29e"/></linearGradient><radialGradient id="g4"><stop offset="0%" stopColor="#292524"/><stop offset="100%" stopColor="#000"/></radialGradient></defs><rect x="148" y="61" width="132" height="20" rx="3" fill="url(#g1)" stroke="#92400e" strokeWidth="0.5"/><rect x="149" y="62" width="130" height="5" rx="2" fill="rgba(255,255,200,0.3)"/><path d="M 162 66 Q 180 63 198 66 Q 216 69 234 66 Q 252 63 268 66" fill="none" stroke="rgba(120,53,15,0.35)" strokeWidth="1"/><circle cx="277" cy="71" r="7" fill="#1c0f00" stroke="#92400e" strokeWidth="1"/>{muzzle&&<circle cx="282" cy="71" r="16" fill="rgba(255,230,50,0.9)" className="muzzle"/>}<g style={{transformOrigin:'100px 88px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}><circle cx="100" cy="88" r="44" fill="url(#g2)" stroke="#92400e" strokeWidth="2"/><circle cx="100" cy="88" r="40" fill="none" stroke="rgba(255,220,100,0.18)" strokeWidth="2"/>{[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=88+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#g4)" stroke="#b45309" strokeWidth="1.5"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}<circle cx="100" cy="88" r="7" fill="#b45309"/></g><path d="M 144 72 L 148 63 L 148 82 L 144 78 Z" fill="url(#g1)"/><path d="M 88 130 Q 88 156 114 158 Q 132 156 132 130" fill="none" stroke="url(#g1)" strokeWidth="7" strokeLinecap="round"/><path d="M 58 88 Q 46 102 46 134 Q 46 168 74 172 L 96 166 Q 102 142 102 130 L 102 104 Z" fill="url(#g3)" stroke="#d6d3d1" strokeWidth="1.5"/></svg>);}
+function RevolverNeon({rotation,spinning,muzzle}){return(<svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl"><defs><linearGradient id="n2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#7c3aed"/><stop offset="100%" stopColor="#0a0015"/></linearGradient><linearGradient id="n3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#3b0764"/><stop offset="100%" stopColor="#050010"/></linearGradient><radialGradient id="n4"><stop offset="0%" stopColor="#2e1065"/><stop offset="100%" stopColor="#000"/></radialGradient></defs><polygon points="148,58 276,58 280,66 280,78 276,84 148,84 144,76 144,66" fill="url(#n3)" stroke="#a855f7" strokeWidth="1"/><rect x="149" y="59" width="128" height="5" rx="1" fill="rgba(200,132,252,0.25)"/><rect x="148" y="55" width="128" height="4" rx="1" fill="#4c1d95"/>{[152,164,176,188].map(x=><rect key={x} x={x} y="56" width="6" height="2" fill="#7c3aed"/>)}<circle cx="278" cy="71" r="7" fill="#050010" stroke="#a855f7" strokeWidth="1.5"/>{muzzle&&<circle cx="283" cy="71" r="16" fill="rgba(200,80,255,0.9)" className="muzzle"/>}<g style={{transformOrigin:'100px 90px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}><circle cx="100" cy="90" r="44" fill="url(#n2)" stroke="#a855f7" strokeWidth="2"/><circle cx="100" cy="90" r="40" fill="none" stroke="rgba(168,85,247,0.3)" strokeWidth="2"/>{[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=90+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#n4)" stroke="#a855f7" strokeWidth="1.5"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}<circle cx="100" cy="90" r="8" fill="#7c3aed"/></g><polygon points="144,68 148,61 148,82 144,78" fill="url(#n3)" stroke="#7c3aed" strokeWidth="0.5"/><path d="M 88 132 Q 88 158 114 160 Q 132 158 132 132" fill="none" stroke="url(#n2)" strokeWidth="7" strokeLinecap="round"/><path d="M 58 90 Q 46 104 46 136 Q 46 170 74 174 L 96 168 Q 102 144 102 132 L 102 106 Z" fill="url(#n3)" stroke="#7c3aed" strokeWidth="1.5"/>{[112,124,136,148].map(y=><path key={y} d={`M 52 ${y} L 96 ${y}`} stroke="rgba(168,85,247,0.3)" strokeWidth="1"/>)}</svg>);}
 
-/* ── Revolver 1: Classic Steel — 1 bullet ── */
-function RevolverClassic({ rotation, spinning, muzzle }) {
-  return (
-    <svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl">
-      <defs>
-        <linearGradient id="c1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#c4c9d4"/><stop offset="100%" stopColor="#1f2937"/></linearGradient>
-        <linearGradient id="c2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#6b7280"/><stop offset="100%" stopColor="#111827"/></linearGradient>
-        <linearGradient id="c3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#92400e"/><stop offset="100%" stopColor="#451a03"/></linearGradient>
-        <radialGradient id="c4"><stop offset="0%" stopColor="#374151"/><stop offset="100%" stopColor="#000"/></radialGradient>
-      </defs>
-      {/* barrel */}
-      <rect x="148" y="60" width="128" height="22" rx="4" fill="url(#c1)"/>
-      <rect x="149" y="61" width="126" height="7" rx="3" fill="rgba(255,255,255,0.15)"/>
-      <rect x="148" y="74" width="128" height="6" rx="2" fill="url(#c2)"/>
-      <circle cx="273" cy="71" r="7" fill="#0a0a0a" stroke="#374151" strokeWidth="1"/>
-      {muzzle && <circle cx="278" cy="71" r="16" fill="rgba(255,210,60,0.85)" className="muzzle-flash"/>}
-      {/* cylinder */}
-      <g style={{transformOrigin:'100px 90px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}>
-        <circle cx="100" cy="90" r="44" fill="url(#c2)" stroke="#374151" strokeWidth="2"/>
-        <circle cx="100" cy="90" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2"/>
-        {[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=90+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#c4)" stroke="#4b5563" strokeWidth="1.5"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}
-        <circle cx="100" cy="90" r="7" fill="#374151"/>
-        <circle cx="100" cy="90" r="3" fill="#1f2937"/>
-      </g>
-      {/* frame connector */}
-      <path d="M 144 72 L 148 63 L 148 82 L 144 78 Z" fill="url(#c1)"/>
-      {/* trigger guard */}
-      <path d="M 88 132 Q 88 158 114 158 Q 132 158 132 132" fill="none" stroke="url(#c2)" strokeWidth="7" strokeLinecap="round"/>
-      {/* grip */}
-      <path d="M 58 90 Q 46 104 46 136 Q 46 170 74 174 L 96 168 Q 102 144 102 132 L 102 106 Z" fill="url(#c3)" stroke="#3b1206" strokeWidth="2"/>
-      <path d="M 55 108 Q 52 128 53 148 Q 54 162 62 172" fill="none" stroke="rgba(255,200,150,0.12)" strokeWidth="5" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
-/* ── Revolver 2: Gold Desert — 3 bullets ── */
-function RevolverGold({ rotation, spinning, muzzle }) {
-  return (
-    <svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl">
-      <defs>
-        <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#fef08a"/><stop offset="45%" stopColor="#eab308"/><stop offset="100%" stopColor="#713f12"/></linearGradient>
-        <linearGradient id="g2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#fcd34d"/><stop offset="100%" stopColor="#78350f"/></linearGradient>
-        <linearGradient id="g3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#f5f5f4"/><stop offset="100%" stopColor="#a8a29e"/></linearGradient>
-        <radialGradient id="g4"><stop offset="0%" stopColor="#292524"/><stop offset="100%" stopColor="#000"/></radialGradient>
-      </defs>
-      {/* long ornate barrel */}
-      <rect x="148" y="61" width="132" height="20" rx="3" fill="url(#g1)" stroke="#92400e" strokeWidth="0.5"/>
-      <rect x="149" y="62" width="130" height="5" rx="2" fill="rgba(255,255,200,0.3)"/>
-      {/* engraving lines */}
-      <path d="M 162 66 Q 180 63 198 66 Q 216 69 234 66 Q 252 63 268 66" fill="none" stroke="rgba(120,53,15,0.35)" strokeWidth="1"/>
-      <path d="M 162 73 Q 180 76 198 73 Q 216 70 234 73 Q 252 76 268 73" fill="none" stroke="rgba(120,53,15,0.25)" strokeWidth="0.8"/>
-      <circle cx="277" cy="71" r="7" fill="#1c0f00" stroke="#92400e" strokeWidth="1"/>
-      {muzzle && <circle cx="282" cy="71" r="16" fill="rgba(255,230,50,0.9)" className="muzzle-flash"/>}
-      {/* cylinder */}
-      <g style={{transformOrigin:'100px 88px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}>
-        <circle cx="100" cy="88" r="44" fill="url(#g2)" stroke="#92400e" strokeWidth="2"/>
-        <circle cx="100" cy="88" r="40" fill="none" stroke="rgba(255,220,100,0.18)" strokeWidth="2"/>
-        <circle cx="100" cy="88" r="34" fill="none" stroke="rgba(255,220,100,0.08)" strokeWidth="1" strokeDasharray="6 3"/>
-        {[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=88+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#g4)" stroke="#b45309" strokeWidth="1.5"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}
-        <circle cx="100" cy="88" r="7" fill="#b45309"/>
-        <circle cx="100" cy="88" r="3" fill="#78350f"/>
-      </g>
-      <path d="M 144 72 L 148 63 L 148 82 L 144 78 Z" fill="url(#g1)"/>
-      <path d="M 88 130 Q 88 156 114 158 Q 132 156 132 130" fill="none" stroke="url(#g1)" strokeWidth="7" strokeLinecap="round"/>
-      {/* ivory grip */}
-      <path d="M 58 88 Q 46 102 46 134 Q 46 168 74 172 L 96 166 Q 102 142 102 130 L 102 104 Z" fill="url(#g3)" stroke="#d6d3d1" strokeWidth="1.5"/>
-      <path d="M 62 106 Q 59 124 60 144 Q 61 160 70 170" fill="none" stroke="rgba(160,140,100,0.25)" strokeWidth="3" strokeLinecap="round"/>
-      <path d="M 72 106 Q 69 124 70 144 Q 71 160 79 170" fill="none" stroke="rgba(160,140,100,0.15)" strokeWidth="2" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
-/* ── Revolver 3: Neon Skull — 5 bullets ── */
-function RevolverNeon({ rotation, spinning, muzzle }) {
-  return (
-    <svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl">
-      <defs>
-        <linearGradient id="n1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#c084fc"/><stop offset="100%" stopColor="#1a0033"/></linearGradient>
-        <linearGradient id="n2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#7c3aed"/><stop offset="100%" stopColor="#0a0015"/></linearGradient>
-        <linearGradient id="n3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#3b0764"/><stop offset="100%" stopColor="#050010"/></linearGradient>
-        <radialGradient id="n4"><stop offset="0%" stopColor="#2e1065"/><stop offset="100%" stopColor="#000"/></radialGradient>
-        <filter id="nglow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="2.5" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-      {/* barrel — angular, aggressive */}
-      <polygon points="148,58 276,58 280,66 280,78 276,84 148,84 144,76 144,66" fill="url(#n3)" stroke="#a855f7" strokeWidth="1"/>
-      <rect x="149" y="59" width="128" height="5" rx="1" fill="rgba(200,132,252,0.25)"/>
-      <rect x="149" y="79" width="128" height="4" rx="1" fill="rgba(124,58,237,0.3)"/>
-      {/* top rail */}
-      <rect x="148" y="55" width="128" height="4" rx="1" fill="#4c1d95"/>
-      <rect x="152" y="56" width="6" height="2" fill="#7c3aed"/>
-      <rect x="164" y="56" width="6" height="2" fill="#7c3aed"/>
-      <rect x="176" y="56" width="6" height="2" fill="#7c3aed"/>
-      <rect x="188" y="56" width="6" height="2" fill="#7c3aed"/>
-      <circle cx="278" cy="71" r="7" fill="#050010" stroke="#a855f7" strokeWidth="1.5"/>
-      <circle cx="278" cy="71" r="4" fill="#000"/>
-      {muzzle && <circle cx="283" cy="71" r="16" fill="rgba(200,80,255,0.9)" className="muzzle-flash"/>}
-      {/* cylinder */}
-      <g style={{transformOrigin:'100px 90px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}>
-        <circle cx="100" cy="90" r="44" fill="url(#n2)" stroke="#a855f7" strokeWidth="2" filter="url(#nglow)"/>
-        <circle cx="100" cy="90" r="40" fill="none" stroke="rgba(168,85,247,0.3)" strokeWidth="2"/>
-        <circle cx="100" cy="90" r="32" fill="none" stroke="rgba(168,85,247,0.15)" strokeWidth="1" strokeDasharray="4 2"/>
-        {[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=90+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#n4)" stroke="#a855f7" strokeWidth="1.5" filter="url(#nglow)"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}
-        <circle cx="100" cy="90" r="8" fill="#7c3aed"/>
-        <circle cx="100" cy="90" r="4" fill="#000"/>
-        {/* skull shape in center */}
-        <ellipse cx="100" cy="89" rx="5" ry="4.5" fill="none" stroke="rgba(200,132,252,0.5)" strokeWidth="0.8"/>
-        <circle cx="98" cy="88" r="1" fill="rgba(200,132,252,0.6)"/>
-        <circle cx="102" cy="88" r="1" fill="rgba(200,132,252,0.6)"/>
-      </g>
-      <polygon points="144,68 148,61 148,82 144,78" fill="url(#n3)" stroke="#7c3aed" strokeWidth="0.5"/>
-      <path d="M 88 132 Q 88 158 114 160 Q 132 158 132 132" fill="none" stroke="url(#n2)" strokeWidth="7" strokeLinecap="round"/>
-      {/* grip */}
-      <path d="M 58 90 Q 46 104 46 136 Q 46 170 74 174 L 96 168 Q 102 144 102 132 L 102 106 Z" fill="url(#n3)" stroke="#7c3aed" strokeWidth="1.5"/>
-      {/* neon lines on grip */}
-      <path d="M 52 112 L 96 112" stroke="rgba(168,85,247,0.4)" strokeWidth="1"/>
-      <path d="M 50 124 L 96 124" stroke="rgba(168,85,247,0.3)" strokeWidth="1"/>
-      <path d="M 50 136 L 95 136" stroke="rgba(168,85,247,0.2)" strokeWidth="1"/>
-      <path d="M 52 148 L 93 148" stroke="rgba(168,85,247,0.15)" strokeWidth="1"/>
-    </svg>
-  );
-}
-
-const REVOLVERS = [
-  { id: 0, name: 'Классика', bullets: 1, label: '1 патрон', difficulty: 'Легко', diffColor: 'text-green-400', render: RevolverClassic },
-  { id: 1, name: 'Золотой', bullets: 3, label: '3 патрона', difficulty: 'Средне', diffColor: 'text-yellow-400', render: RevolverGold },
-  { id: 2, name: 'Неон', bullets: 5, label: '5 патронов', difficulty: 'Хардкор', diffColor: 'text-red-400', render: RevolverNeon },
+const REVOLVERS=[
+  {id:0,name:'Классика',bullets:1,label:'1 патрон',difficulty:'Легко',diffColor:'text-green-400',render:RevolverClassic},
+  {id:1,name:'Золотой',bullets:3,label:'3 патрона',difficulty:'Средне',diffColor:'text-yellow-400',render:RevolverGold},
+  {id:2,name:'Неон',bullets:5,label:'5 патронов',difficulty:'Хардкор',diffColor:'text-red-400',render:RevolverNeon},
 ];
 
-function App() {
-  const [revolverIdx, setRevolverIdx] = useState(0);
-  const [chambers, setChambers] = useState(() => initGame(1));
-  const [revealed, setRevealed] = useState([]);
-  const [gameOver, setGameOver] = useState(false);
-  const [currentPlayer, setCurrentPlayer] = useState(1);
-  const [mode, setMode] = useState('solo');
-  const [scores, setScores] = useState({ p1: 0, p2: 0 });
-  const [message, setMessage] = useState('Выбери ствол и крути барабан...');
-  const [spinning, setSpinning] = useState(false);
-  const [particles, setParticles] = useState([]);
-  const [drumRotation, setDrumRotation] = useState(0);
-  const [flash, setFlash] = useState(false);
-  const [shake, setShake] = useState(false);
-  const [muzzle, setMuzzle] = useState(false);
+/* ═══════════════ HOME SCREEN ═══════════════ */
+const MENU=[
+  {id:'roulette',emoji:'🍺',name:'Пивная рулетка',desc:'6 кружек, 1 ловушка',from:'from-amber-800',to:'to-amber-950',border:'border-amber-600'},
+  {id:'bomba',emoji:'🧨',name:'Бомба',desc:'Передай до взрыва',from:'from-red-800',to:'to-red-950',border:'border-red-600'},
+  {id:'names',emoji:'🎰',name:'Рулетка имён',desc:'Стрелка тычет — тот пьёт',from:'from-purple-800',to:'to-purple-950',border:'border-purple-600'},
+  {id:'ktoiznas',emoji:'🤔',name:'Кто из нас?',desc:'Тайное голосование',from:'from-blue-800',to:'to-blue-950',border:'border-blue-600'},
+  {id:'svetofor',emoji:'🚦',name:'Светофор',desc:'Нажал — кто-то пьёт',from:'from-green-800',to:'to-green-950',border:'border-green-600'},
+  {id:'knb',emoji:'✊',name:'КНБ на пьянку',desc:'Проиграл — пьёшь',from:'from-teal-800',to:'to-teal-950',border:'border-teal-600'},
+];
 
-  function initGame(b) {
-    const arr = [false,false,false,false,false,false];
-    const pos = [];
-    while (pos.length < b) { const p = Math.floor(Math.random()*6); if (!pos.includes(p)) pos.push(p); }
-    pos.forEach(p => arr[p] = true);
+function HomeScreen({onSelect}){
+  return(
+    <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-stone-950 flex flex-col p-4">
+      <div className="text-center mb-6 pt-2">
+        <h1 className="text-4xl font-black text-amber-100 tracking-tight" style={{textShadow:'0 0 30px rgba(251,191,36,0.4)'}}>🍺 ПИВНЫЕ ИГРЫ</h1>
+        <p className="text-stone-400 text-sm mt-1">Выбери игру</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto w-full">
+        {MENU.map(g=>(
+          <button key={g.id} onClick={()=>onSelect(g.id)}
+            className={`bg-gradient-to-br ${g.from} ${g.to} border ${g.border} rounded-2xl p-4 text-left active:scale-95 transition-transform shadow-lg`}>
+            <div className="text-4xl mb-2">{g.emoji}</div>
+            <div className="text-white font-bold text-sm leading-tight">{g.name}</div>
+            <div className="text-stone-300 text-xs mt-1 opacity-80">{g.desc}</div>
+          </button>
+        ))}
+      </div>
+      <p className="text-center text-stone-600 text-xs mt-6">🍻 Пейте ответственно</p>
+    </div>
+  );
+}
+
+/* ═══════════════ BACK BUTTON ═══════════════ */
+function BackBtn({onBack,light}){
+  return(
+    <button onClick={onBack} className={`flex items-center gap-1 text-sm font-semibold mb-4 ${light?'text-white opacity-70':'text-stone-400'} active:opacity-50`}>
+      ← Меню
+    </button>
+  );
+}
+
+/* ═══════════════ 1. ПИВНАЯ РУЛЕТКА ═══════════════ */
+function RouletteGame({onBack}){
+  const[revolverIdx,setRevolverIdx]=useState(0);
+  const[chambers,setChambers]=useState(()=>initGame(1));
+  const[revealed,setRevealed]=useState([]);
+  const[gameOver,setGameOver]=useState(false);
+  const[currentPlayer,setCurrentPlayer]=useState(1);
+  const[mode,setMode]=useState('solo');
+  const[scores,setScores]=useState({p1:0,p2:0});
+  const[message,setMessage]=useState('Выбери ствол и крути барабан...');
+  const[spinning,setSpinning]=useState(false);
+  const[particles,setParticles]=useState([]);
+  const[drumRotation,setDrumRotation]=useState(0);
+  const[flash,setFlash]=useState(false);
+  const[shake,setShake]=useState(false);
+  const[muzzle,setMuzzle]=useState(false);
+
+  function initGame(b){
+    const arr=[false,false,false,false,false,false];
+    const pos=[];
+    while(pos.length<b){const p=Math.floor(Math.random()*6);if(!pos.includes(p))pos.push(p);}
+    pos.forEach(p=>arr[p]=true);
     return arr;
   }
-
-  function reset(keepScores = true, b) {
-    const bullets = b !== undefined ? b : REVOLVERS[revolverIdx].bullets;
-    setChambers(initGame(bullets));
-    setRevealed([]);
-    setGameOver(false);
-    setCurrentPlayer(1);
-    setMessage(mode === 'solo' ? 'Крути барабан и выбирай кружку...' : 'Игрок 1, твой ход');
-    setParticles([]);
-    setSpinning(false);
-    setMuzzle(false);
-    if (!keepScores) setScores({ p1: 0, p2: 0 });
+  function reset(keepScores=true,b){
+    const bullets=b!==undefined?b:REVOLVERS[revolverIdx].bullets;
+    setChambers(initGame(bullets));setRevealed([]);setGameOver(false);setCurrentPlayer(1);
+    setMessage(mode==='solo'?'Крути барабан и выбирай кружку...':'Игрок 1, твой ход');
+    setParticles([]);setSpinning(false);setMuzzle(false);
+    if(!keepScores)setScores({p1:0,p2:0});
   }
-
-  function pickRevolver(i) {
-    setRevolverIdx(i);
-    const b = REVOLVERS[i].bullets;
-    setChambers(initGame(b));
-    setRevealed([]);
-    setGameOver(false);
-    setCurrentPlayer(1);
-    setMessage('Крути барабан и выбирай кружку...');
-    setParticles([]);
-    setSpinning(false);
-    setMuzzle(false);
-    setScores({ p1: 0, p2: 0 });
+  function pickRevolver(i){
+    setRevolverIdx(i);const b=REVOLVERS[i].bullets;
+    setChambers(initGame(b));setRevealed([]);setGameOver(false);setCurrentPlayer(1);
+    setMessage('Крути барабан и выбирай кружку...');setParticles([]);setSpinning(false);setMuzzle(false);setScores({p1:0,p2:0});
   }
-
-  function spawnParticles(x, y) {
-    const emojis = ['🍺','💧','🫧','✨','💦','🍻'];
-    const list = [];
-    for (let i = 0; i < 35; i++) {
-      const angle = (Math.PI*2*i)/35 + Math.random()*0.5;
-      const speed = 80 + Math.random()*200;
-      list.push({ id: i, x, y, dx: Math.cos(angle)*speed, dy: Math.sin(angle)*speed - 80, emoji: emojis[Math.floor(Math.random()*emojis.length)], rotation: Math.random()*720-360, scale: 0.5+Math.random()*1.3 });
-    }
-    setParticles(list);
-    setTimeout(() => setParticles([]), 2500);
+  function spawnParticles(x,y){
+    const emojis=['🍺','💧','🫧','✨','💦','🍻'];
+    const list=[];
+    for(let i=0;i<30;i++){const angle=(Math.PI*2*i)/30+Math.random()*0.5,speed=80+Math.random()*200;list.push({id:i,x,y,dx:Math.cos(angle)*speed,dy:Math.sin(angle)*speed-80,emoji:emojis[Math.floor(Math.random()*emojis.length)],rotation:Math.random()*720-360,scale:0.5+Math.random()*1.3});}
+    setParticles(list);setTimeout(()=>setParticles([]),2500);
   }
-
-  function pick(idx) {
-    if (gameOver || revealed.includes(idx) || spinning) return;
-    setSpinning(true);
-    setDrumRotation(r => r + 1080 + Math.random()*360);
-    setTimeout(() => {
-      setSpinning(false);
-      const newRevealed = [...revealed, idx];
-      setRevealed(newRevealed);
-      if (chambers[idx]) {
-        playGunshot();
-        setMuzzle(true); setTimeout(() => setMuzzle(false), 200);
-        setFlash(true); setTimeout(() => setFlash(false), 200);
-        setShake(true); setTimeout(() => setShake(false), 600);
-        const cell = document.getElementById('cell-'+idx);
-        if (cell) { const r = cell.getBoundingClientRect(); spawnParticles(r.left+r.width/2, r.top+r.height/2); }
+  function pick(idx){
+    if(gameOver||revealed.includes(idx)||spinning)return;
+    setSpinning(true);setDrumRotation(r=>r+1080+Math.random()*360);
+    setTimeout(()=>{
+      setSpinning(false);const nr=[...revealed,idx];setRevealed(nr);
+      if(chambers[idx]){
+        playGunshot();setMuzzle(true);setTimeout(()=>setMuzzle(false),200);
+        setFlash(true);setTimeout(()=>setFlash(false),200);
+        setShake(true);setTimeout(()=>setShake(false),600);
+        const cell=document.getElementById('cell-'+idx);
+        if(cell){const r=cell.getBoundingClientRect();spawnParticles(r.left+r.width/2,r.top+r.height/2);}
         setGameOver(true);
-        if (mode === 'solo') {
-          setMessage('💥 Крах! Кружка '+(idx+1)+' разбилась. Пьёшь штрафную!');
-        } else {
-          const loser = currentPlayer, winner = currentPlayer === 1 ? 2 : 1;
-          setMessage('💥 Игрок '+loser+' разбил кружку! Победил Игрок '+winner+' 🍻');
-          setScores(s => ({ ...s, [winner===1?'p1':'p2']: s[winner===1?'p1':'p2']+1 }));
-        }
+        if(mode==='solo'){setMessage('💥 Крах! Кружка '+(idx+1)+' разбилась. Пьёшь штрафную!');}
+        else{const loser=currentPlayer,winner=currentPlayer===1?2:1;setMessage('💥 Игрок '+loser+' разбил кружку! Победил Игрок '+winner+' 🍻');setScores(s=>({...s,[winner===1?'p1':'p2']:s[winner===1?'p1':'p2']+1}));}
       } else {
-        const remaining = 6 - newRevealed.length;
-        if (mode === 'solo') {
-          if (remaining === 0) { setMessage('🎉 Невероятно! Все кружки целы!'); setGameOver(true); }
-          else { setMessage('🍺 Цела! Осталось '+remaining+'.'); }
-        } else {
-          const next = currentPlayer === 1 ? 2 : 1;
-          setCurrentPlayer(next);
-          setMessage('🍺 Цела! Игрок '+next+', твой ход');
-        }
+        const rem=6-nr.length;
+        if(mode==='solo'){if(rem===0){setMessage('🎉 Невероятно! Все кружки целы!');setGameOver(true);}else{setMessage('🍺 Цела! Осталось '+rem+'.');}}
+        else{const next=currentPlayer===1?2:1;setCurrentPlayer(next);setMessage('🍺 Цела! Игрок '+next+', твой ход');}
       }
-    }, 800);
+    },800);
   }
-
-  const rev = REVOLVERS[revolverIdx];
-  const RevolverComp = rev.render;
-
-  return (
-    <div className={'min-h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex items-start justify-center py-4 px-3 overflow-x-hidden relative ' + (shake ? 'animate-shake' : '')}>
-      {flash && <div className="fixed inset-0 bg-amber-300 pointer-events-none flash z-50"/>}
-      <div className="fixed inset-0 pointer-events-none z-40">
-        {particles.map(p => (<div key={p.id} className="absolute particle text-2xl" style={{left:p.x,top:p.y,'--tx':p.dx+'px','--ty':p.dy+'px','--rot':p.rotation+'deg',transform:'scale('+p.scale+')'}}>{p.emoji}</div>))}
-      </div>
-
+  const rev=REVOLVERS[revolverIdx],RC=rev.render;
+  return(
+    <div className={'min-h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex items-start justify-center py-4 px-3 overflow-x-hidden relative '+(shake?'shake':'')}>
+      {flash&&<div className="fixed inset-0 bg-amber-300 pointer-events-none flash z-50"/>}
+      <div className="fixed inset-0 pointer-events-none z-40">{particles.map(p=>(<div key={p.id} className="absolute pfly text-2xl" style={{left:p.x,top:p.y,'--tx':p.dx+'px','--ty':p.dy+'px','--rot':p.rotation+'deg',transform:'scale('+p.scale+')'}}>{p.emoji}</div>))}</div>
       <div className="max-w-lg w-full relative z-10">
-        {/* Title */}
+        <BackBtn onBack={onBack}/>
         <div className="text-center mb-2">
-          <h1 className="text-3xl sm:text-5xl font-black text-amber-100 mb-0.5 tracking-tight" style={{textShadow:'0 0 30px rgba(251,191,36,0.5)'}}>🍺 ПИВНАЯ РУЛЕТКА</h1>
-          <p className="text-amber-200 opacity-50 text-xs sm:text-sm">{6-rev.bullets} целых · {rev.bullets} взрывных</p>
+          <h1 className="text-3xl sm:text-4xl font-black text-amber-100 mb-0.5 tracking-tight" style={{textShadow:'0 0 30px rgba(251,191,36,0.5)'}}>🍺 ПИВНАЯ РУЛЕТКА</h1>
+          <p className="text-amber-200 opacity-50 text-xs">{6-rev.bullets} целых · {rev.bullets} взрывных</p>
         </div>
-
-        {/* Active revolver */}
-        <div className="flex justify-center mb-2">
-          <div className="w-52 h-32 sm:w-72 sm:h-44">
-            <RevolverComp rotation={drumRotation} spinning={spinning} muzzle={muzzle}/>
-          </div>
-        </div>
-
-        {/* Revolver selector */}
+        <div className="flex justify-center mb-2"><div className="w-52 h-32 sm:w-64 sm:h-40"><RC rotation={drumRotation} spinning={spinning} muzzle={muzzle}/></div></div>
         <div className="grid grid-cols-3 gap-2 mb-3">
-          {REVOLVERS.map((r, i) => {
-            const Comp = r.render;
-            const active = revolverIdx === i;
-            return (
-              <button key={r.id} onClick={() => pickRevolver(i)}
-                className={'rounded-xl border-2 p-1.5 text-center transition-all duration-200 active:scale-95 ' + (active ? 'border-amber-400 bg-stone-700 shadow-lg shadow-amber-900/40' : 'border-stone-600 bg-stone-800')}>
-                <div className="h-12 sm:h-16 mb-0.5"><Comp rotation={0} spinning={false} muzzle={false}/></div>
-                <div className={'text-xs sm:text-sm font-bold ' + (active?'text-amber-200':'text-stone-400')}>{r.name}</div>
-                <div className={'text-xs ' + r.diffColor}>{r.label}</div>
-                <div className={'text-xs opacity-70 ' + r.diffColor}>{r.difficulty}</div>
-              </button>
-            );
-          })}
+          {REVOLVERS.map((r,i)=>{const Comp=r.render,active=revolverIdx===i;return(<button key={r.id} onClick={()=>pickRevolver(i)} className={'rounded-xl border-2 p-1.5 text-center transition-all active:scale-95 '+(active?'border-amber-400 bg-stone-700 shadow-lg':'border-stone-600 bg-stone-800')}><div className="h-12"><Comp rotation={0} spinning={false} muzzle={false}/></div><div className={'text-xs font-bold '+(active?'text-amber-200':'text-stone-400')}>{r.name}</div><div className={'text-xs '+r.diffColor}>{r.label}</div><div className={'text-xs opacity-70 '+r.diffColor}>{r.difficulty}</div></button>);})}
         </div>
-
-        {/* Mode */}
         <div className="flex gap-2 mb-2 justify-center">
-          <button onClick={() => { setMode('solo'); reset(false); }}
-            className={'flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-sm transition-all active:scale-95 ' + (mode==='solo'?'bg-amber-400 text-stone-900 shadow-lg':'bg-stone-800 text-amber-200')}>👤 СОЛО</button>
-          <button onClick={() => { setMode('duel'); reset(false); }}
-            className={'flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-sm transition-all active:scale-95 ' + (mode==='duel'?'bg-orange-500 text-white shadow-lg':'bg-stone-800 text-amber-200')}>👥 ДУЭЛЬ</button>
+          <button onClick={()=>{setMode('solo');reset(false);}} className={'px-4 py-2 rounded-lg font-bold text-sm active:scale-95 '+(mode==='solo'?'bg-amber-400 text-stone-900':'bg-stone-800 text-amber-200')}>👤 СОЛО</button>
+          <button onClick={()=>{setMode('duel');reset(false);}} className={'px-4 py-2 rounded-lg font-bold text-sm active:scale-95 '+(mode==='duel'?'bg-orange-500 text-white':'bg-stone-800 text-amber-200')}>👥 ДУЭЛЬ</button>
         </div>
-
-        {/* Message */}
-        <div className="bg-stone-800 bg-opacity-80 backdrop-blur border border-amber-700 rounded-xl px-4 py-3 mb-3 text-center shadow-xl">
-          {mode==='duel' && !gameOver && (<div className="text-xs uppercase tracking-widest text-amber-200 opacity-50 mb-1">Ход: <span className={currentPlayer===1?'text-amber-300':'text-orange-400'}>Игрок {currentPlayer}</span></div>)}
-          <div className="text-base sm:text-lg text-amber-50 font-medium leading-snug" style={{minHeight:'24px'}}>{message}</div>
-          {mode==='duel' && (<div className="flex justify-center gap-6 mt-2 text-sm font-bold"><div className="text-amber-300">Игрок 1: {scores.p1}</div><div className="text-orange-400">Игрок 2: {scores.p2}</div></div>)}
+        <div className="bg-stone-800 bg-opacity-80 border border-amber-700 rounded-xl px-4 py-3 mb-3 text-center">
+          {mode==='duel'&&!gameOver&&<div className="text-xs text-amber-200 opacity-50 mb-1">Ход: <span className={currentPlayer===1?'text-amber-300':'text-orange-400'}>Игрок {currentPlayer}</span></div>}
+          <div className="text-base text-amber-50 font-medium leading-snug" style={{minHeight:'24px'}}>{message}</div>
+          {mode==='duel'&&<div className="flex justify-center gap-6 mt-2 text-sm font-bold"><div className="text-amber-300">И1: {scores.p1}</div><div className="text-orange-400">И2: {scores.p2}</div></div>}
         </div>
-
-        {/* Chambers */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-3">
-          {chambers.map((isLose, idx) => {
-            const isRevealed = revealed.includes(idx);
-            const showResult = isRevealed || gameOver;
-            return (
-              <button id={'cell-'+idx} key={idx} onClick={() => pick(idx)} disabled={isRevealed||gameOver||spinning}
-                className={'aspect-square rounded-xl sm:rounded-2xl transition-all duration-300 relative overflow-hidden p-1.5 sm:p-2 active:scale-95 '+(
-                  !showResult ? 'bg-gradient-to-br from-stone-700 to-stone-900 cursor-pointer border-2 border-amber-700'
-                  : isLose ? 'bg-gradient-to-br from-red-700 via-amber-800 to-stone-900 border-2 border-red-500 shadow-2xl'
-                  : 'bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-300 shadow-lg'
-                )+(spinning?' animate-pulse':'')}>
-                {!showResult
-                  ? (<div className="flex items-center justify-center h-full"><span className="text-2xl sm:text-3xl text-amber-200 opacity-40 font-mono font-bold">{idx+1}</span></div>)
-                  : isLose ? <BrokenMug/> : <BeerMug/>}
-              </button>
-            );
-          })}
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {chambers.map((isLose,idx)=>{const isRev=revealed.includes(idx),show=isRev||gameOver;return(<button id={'cell-'+idx} key={idx} onClick={()=>pick(idx)} disabled={isRev||gameOver||spinning} className={'aspect-square rounded-xl transition-all duration-300 relative overflow-hidden p-1.5 active:scale-95 '+(!show?'bg-gradient-to-br from-stone-700 to-stone-900 border-2 border-amber-700':isLose?'bg-gradient-to-br from-red-700 via-amber-800 to-stone-900 border-2 border-red-500':'bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-300')+(spinning?' animate-pulse':'')}>{!show?<div className="flex items-center justify-center h-full"><span className="text-2xl text-amber-200 opacity-40 font-mono font-bold">{idx+1}</span></div>:isLose?<BrokenMug/>:<BeerMug/>}</button>);})}
         </div>
-
-        <div className="flex gap-2 justify-center flex-wrap mb-3">
-          <button onClick={() => reset(true)} className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-orange-500 text-stone-900 rounded-lg font-bold active:scale-95 transition-transform shadow-lg text-sm">🔄 ЕЩЁ ПО ОДНОЙ</button>
-          {mode==='duel' && (<button onClick={() => reset(false)} className="px-5 py-2.5 bg-stone-800 text-amber-200 rounded-lg font-bold active:scale-95 transition-colors text-sm">СБРОС СЧЁТА</button>)}
+        <div className="flex gap-2 justify-center mb-3">
+          <button onClick={()=>reset(true)} className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-orange-500 text-stone-900 rounded-lg font-bold active:scale-95 text-sm shadow-lg">🔄 ЕЩЁ ПО ОДНОЙ</button>
+          {mode==='duel'&&<button onClick={()=>reset(false)} className="px-5 py-2.5 bg-stone-800 text-amber-200 rounded-lg font-bold active:scale-95 text-sm">СБРОС</button>}
         </div>
-        <div className="text-center text-xs text-amber-200 opacity-30 pb-2">🍻 Пейте ответственно. Это просто игра.</div>
       </div>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+/* ═══════════════ 2. БОМБА ═══════════════ */
+function BombaGame({onBack}){
+  const[phase,setPhase]=useState('idle'); // idle | ticking | exploded
+  const[timeLeft,setTimeLeft]=useState(0);
+  const[totalTime,setTotalTime]=useState(0);
+  const intervalRef=useRef(null);
+  const tickRef=useRef(null);
+
+  function startBomb(){
+    const t=10+Math.floor(Math.random()*36); // 10-45 seconds
+    setTotalTime(t);setTimeLeft(t);setPhase('ticking');
+  }
+
+  useEffect(()=>{
+    if(phase!=='ticking')return;
+    intervalRef.current=setInterval(()=>{
+      setTimeLeft(prev=>{
+        if(prev<=1){
+          clearInterval(intervalRef.current);
+          clearInterval(tickRef.current);
+          playExplosion();
+          setPhase('exploded');
+          return 0;
+        }
+        return prev-1;
+      });
+    },1000);
+    // ticking sound — speeds up as time runs out
+    function scheduleTick(){
+      setTimeLeft(cur=>{
+        const ratio=cur/totalTime;
+        const delay=ratio>0.5?600:ratio>0.25?350:180;
+        playTick(600+Math.random()*200);
+        tickRef.current=setTimeout(scheduleTick,delay);
+        return cur;
+      });
+    }
+    setTimeout(scheduleTick,200);
+    return()=>{clearInterval(intervalRef.current);clearTimeout(tickRef.current);};
+  },[phase]);
+
+  function reset(){setPhase('idle');setTimeLeft(0);clearInterval(intervalRef.current);clearTimeout(tickRef.current);}
+
+  const progress=totalTime>0?(timeLeft/totalTime)*100:100;
+  const danger=timeLeft<=10;
+
+  if(phase==='exploded') return(
+    <div className="min-h-screen bg-red-900 flex flex-col items-center justify-center p-6 text-center">
+      <div className="text-9xl mb-4 boom">💥</div>
+      <h2 className="text-5xl font-black text-white mb-3">БУМ!</h2>
+      <p className="text-2xl text-red-200 font-bold mb-8">ТЫ ПЬЁШЬ! 🍺</p>
+      <button onClick={reset} className="px-8 py-4 bg-white text-red-900 rounded-2xl font-black text-xl active:scale-95">Заново</button>
+      <button onClick={onBack} className="mt-4 text-red-300 text-sm">← Меню</button>
+    </div>
+  );
+
+  if(phase==='ticking') return(
+    <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors duration-500 ${danger?'bg-red-950':'bg-stone-950'}`}>
+      <div className={`text-8xl mb-6 ${danger?'animate-bounce':''}`} style={{filter:danger?'drop-shadow(0 0 20px red)':'none'}}>🧨</div>
+      <div className={`text-8xl font-black mb-4 tabular-nums ${danger?'text-red-400':'text-white'}`}>{timeLeft}</div>
+      {/* progress bar */}
+      <div className="w-64 h-3 bg-stone-800 rounded-full mb-8 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-1000 ${danger?'bg-red-500':'bg-amber-400'}`} style={{width:progress+'%'}}/>
+      </div>
+      <button onClick={()=>{/* передать — просто визуальный сигнал */}}
+        className={`w-64 py-6 rounded-3xl font-black text-3xl active:scale-95 shadow-2xl transition-colors ${danger?'bg-red-500 text-white':'bg-amber-400 text-stone-900'}`}>
+        📲 ПЕРЕДАЙ!
+      </button>
+      <p className="text-stone-500 text-xs mt-6">Нажимай «передай» каждый раз когда берёшь телефон</p>
+    </div>
+  );
+
+  return(
+    <div className="min-h-screen bg-gradient-to-br from-red-950 via-stone-900 to-red-950 flex flex-col items-center justify-center p-6 text-center">
+      <BackBtn onBack={onBack} light/>
+      <div className="text-8xl mb-6" style={{filter:'drop-shadow(0 0 20px rgba(255,100,0,0.5))'}}>🧨</div>
+      <h1 className="text-4xl font-black text-white mb-2">БОМБА</h1>
+      <p className="text-red-200 opacity-70 mb-8 text-sm">Таймер скрыт. Передавай телефон по кругу.<br/>У кого взорвётся — пьёт.</p>
+      <button onClick={startBomb} className="w-56 py-6 bg-red-500 text-white rounded-3xl font-black text-2xl active:scale-95 shadow-2xl">
+        💣 ПОДЖЕЧЬ!
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════ AVATAR PICKER ═══════════════ */
+function AvatarPicker({players, onToggle, onRename, borderColor='border-amber-400'}){
+  return(
+    <div className="grid grid-cols-4 gap-2">
+      {[1,2,3,4,5,6,7,8].map(id=>{
+        const pl=players.find(p=>p.charId===id);
+        const sel=!!pl;
+        return(
+          <div key={id}>
+            <button onClick={()=>onToggle(id)}
+              className={'w-full rounded-xl overflow-hidden border-2 transition-all active:scale-90 '+(sel?borderColor+' shadow-lg':'border-stone-700 opacity-50')}>
+              <img src={`chars/char${id}.jpg`} className="w-full" style={{aspectRatio:'3/4',objectFit:'cover',objectPosition:'top'}}/>
+            </button>
+            {sel&&<input value={pl.name} onChange={e=>onRename(id,e.target.value)}
+              className="mt-1 w-full bg-stone-800 text-white text-xs px-1 py-1.5 rounded-lg text-center outline-none border border-stone-600"
+              maxLength={10}/>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══════════════ 3. РУЛЕТКА ИМЁН ═══════════════ */
+const WHEEL_COLORS=['#f59e0b','#ef4444','#3b82f6','#10b981','#8b5cf6','#f97316','#ec4899','#06b6d4','#84cc16','#a855f7'];
+
+function NamesGame({onBack}){
+  const[phase,setPhase]=useState('setup');
+  const[players,setPlayers]=useState([]);
+  const[rotation,setRotation]=useState(0);
+  const[spinning,setSpinning]=useState(false);
+  const[winner,setWinner]=useState(null);
+  const[gulps,setGulps]=useState(null);
+
+  function togglePlayer(id){
+    if(players.find(p=>p.charId===id)){setPlayers(players.filter(p=>p.charId!==id));}
+    else if(players.length<8){setPlayers([...players,{charId:id,name:'Игрок '+(players.length+1)}]);}
+  }
+  function renamePlayer(id,name){setPlayers(players.map(p=>p.charId===id?{...p,name}:p));}
+
+  function spin(){
+    if(spinning||players.length<2)return;
+    setWinner(null);setGulps(null);setSpinning(true);
+    const wi=Math.floor(Math.random()*players.length);
+    const seg=360/players.length;
+    const targetR=rotation+(5+Math.floor(Math.random()*5))*360+(wi+0.5)*seg;
+    setRotation(targetR);
+    setTimeout(()=>{setSpinning(false);setWinner(players[wi]);},4000);
+  }
+
+  const cx=150,cy=150,r=128,n=players.length||1;
+
+  if(phase==='spin') return(
+    <div className="min-h-screen bg-gradient-to-br from-purple-950 via-stone-900 to-purple-950 flex flex-col items-center p-4">
+      <BackBtn onBack={()=>{setPhase('setup');setWinner(null);setGulps(null);}} light/>
+      <h1 className="text-3xl font-black text-purple-100 mb-3">🎰 Рулетка имён</h1>
+      <div className="relative mb-4">
+        <svg viewBox="0 0 300 300" className="w-72 h-72">
+          <polygon points="150,4 141,26 159,26" fill="#fbbf24" stroke="#92400e" strokeWidth="1.5"/>
+          <g style={{transformOrigin:'150px 150px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 4s cubic-bezier(0.17,0.67,0.1,1)':'none'}}>
+            {players.map((pl,i)=>{
+              const seg=360/n,startD=i*seg,endD=(i+1)*seg;
+              const sR=(startD-90)*Math.PI/180,eR=(endD-90)*Math.PI/180;
+              const x1=cx+r*Math.cos(sR),y1=cy+r*Math.sin(sR),x2=cx+r*Math.cos(eR),y2=cy+r*Math.sin(eR);
+              const path=`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${seg>180?1:0} 1 ${x2} ${y2} Z`;
+              const midD=(startD+endD)/2,midR=(midD-90)*Math.PI/180;
+              const lx=cx+r*0.65*Math.cos(midR),ly=cy+r*0.65*Math.sin(midR);
+              const nm=pl.name.length>8?pl.name.slice(0,7)+'…':pl.name;
+              return(<g key={i}><path d={path} fill={WHEEL_COLORS[i%WHEEL_COLORS.length]} stroke="#fff" strokeWidth="2"/><text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={pl.name.length>6?'9':'11'} fontWeight="bold" transform={`rotate(${midD},${lx},${ly})`}>{nm}</text></g>);
+            })}
+            <circle cx={cx} cy={cy} r="18" fill="#1f2937" stroke="#fff" strokeWidth="2"/>
+          </g>
+        </svg>
+      </div>
+      {!winner&&<button onClick={spin} disabled={spinning} className="px-8 py-4 bg-purple-600 text-white rounded-2xl font-black text-2xl active:scale-95 disabled:opacity-50 shadow-lg">{spinning?'...':'КРУТИТЬ!'}</button>}
+      {winner&&(
+        <div className="text-center pop">
+          <img src={`chars/char${winner.charId}.jpg`} className="w-24 h-32 object-cover rounded-2xl mx-auto mb-2 border-4 border-yellow-400 shadow-xl" style={{objectPosition:'top'}}/>
+          <div className="text-4xl font-black text-yellow-300 mb-1">{winner.name}</div>
+          <div className="text-2xl text-white mb-4">пьёт! 🍺</div>
+          {gulps?<div className="text-4xl font-black text-amber-300 mb-4">{gulps} {gulps===1?'глоток':gulps<5?'глотка':'глотков'}!</div>:
+            <button onClick={()=>setGulps(1+Math.floor(Math.random()*5))} className="px-6 py-3 bg-amber-500 text-stone-900 rounded-xl font-bold text-lg active:scale-95 mb-3">🎲 Сколько глотков?</button>}
+          <div><button onClick={()=>{setWinner(null);setGulps(null);}} className="px-6 py-2 bg-stone-700 text-white rounded-xl text-sm active:scale-95">Крутить снова</button></div>
+        </div>
+      )}
+    </div>
+  );
+
+  return(
+    <div className="min-h-screen bg-gradient-to-br from-purple-950 via-stone-900 to-purple-950 flex flex-col p-4">
+      <BackBtn onBack={onBack} light/>
+      <h1 className="text-2xl font-black text-purple-100 text-center mb-1">🎰 Рулетка имён</h1>
+      <p className="text-purple-300 text-xs text-center mb-3 opacity-70">Выбери игроков (мин. 2) · тапни чтобы переименовать</p>
+      <AvatarPicker players={players} onToggle={togglePlayer} onRename={renamePlayer} borderColor="border-purple-400"/>
+      <button onClick={()=>setPhase('spin')} disabled={players.length<2}
+        className="w-full py-4 bg-purple-600 text-white rounded-2xl font-black text-xl active:scale-95 disabled:opacity-40 shadow-lg mt-4">
+        ИГРАТЬ ({players.length} чел.)
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════ 4. КТО ИЗ НАС ═══════════════ */
+const QUESTIONS=[
+  "Кто из нас сегодня уже пьянее всех?",
+  "Кто из нас чаще всего опаздывает?",
+  "Кто из нас съел больше всех сегодня?",
+  "Кто из нас самый громкий за столом?",
+  "Кто из нас лучше всего поёт?",
+  "Кто из нас хуже всего танцует?",
+  "Кто из нас самый ленивый?",
+  "Кто из нас чаще сидит в телефоне?",
+  "Кто из нас первым бы сбежал домой?",
+  "Кто из нас самый хитрый?",
+  "Кто из нас дольше всех спит?",
+  "Кто из нас тратит больше всех денег?",
+  "Кто из нас самый весёлый сегодня?",
+  "Кто из нас первым напьётся?",
+  "Кто из нас самый смелый?",
+  "Кто из нас не помнит вчерашний вечер?",
+  "Кто из нас чаще всего врёт?",
+  "Кто из нас больше всех флиртует?",
+  "Кто из нас самый трусливый?",
+  "Кто из нас придёт последним на следующую тусу?",
+  "Кто из нас лучше готовит?",
+  "Кто из нас самый упрямый?",
+];
+
+function KtoIzNasGame({onBack}){
+  const[phase,setPhase]=useState('setup');
+  const[players,setPlayers]=useState([]);
+  const[qIdx,setQIdx]=useState(0);
+  const[questions,setQuestions]=useState(()=>[...QUESTIONS].sort(()=>Math.random()-0.5));
+  const[voterIdx,setVoterIdx]=useState(0);
+  const[votes,setVotes]=useState({});
+  const[passing,setPassing]=useState(false);
+  const[showResult,setShowResult]=useState(false);
+
+  function togglePlayer(id){
+    if(players.find(p=>p.charId===id)){setPlayers(players.filter(p=>p.charId!==id));}
+    else if(players.length<8){setPlayers([...players,{charId:id,name:'Игрок '+(players.length+1)}]);}
+  }
+  function renamePlayer(id,name){setPlayers(players.map(p=>p.charId===id?{...p,name}:p));}
+
+  function startGame(){
+    setPhase('game');setVoterIdx(0);setVotes({});setShowResult(false);setQIdx(0);
+    setQuestions([...QUESTIONS].sort(()=>Math.random()-0.5));
+  }
+
+  function vote(key){
+    const nv={...votes,[key]:(votes[key]||0)+1};setVotes(nv);
+    if(voterIdx+1>=players.length){setShowResult(true);}
+    else{setPassing(true);setTimeout(()=>{setPassing(false);setVoterIdx(v=>v+1);},1400);}
+  }
+
+  function nextQuestion(){setVoterIdx(0);setVotes({});setShowResult(false);setQIdx(i=>(i+1)%questions.length);}
+
+  const curVoter=players[voterIdx];
+  const nextVoter=players[voterIdx+1];
+  const winnerEntry=showResult?Object.entries(votes).sort((a,b)=>b[1]-a[1])[0]:null;
+  const winnerPlayer=winnerEntry?players.find(p=>p.name===winnerEntry[0]):null;
+  const tie=showResult&&winnerEntry&&Object.values(votes).filter(v=>v===winnerEntry[1]).length>1;
+  const cols=players.length<=4?'grid-cols-2':'grid-cols-4';
+
+  if(phase==='setup') return(
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-stone-900 to-blue-950 flex flex-col p-4">
+      <BackBtn onBack={onBack} light/>
+      <h1 className="text-2xl font-black text-blue-100 text-center mb-1">🤔 Кто из нас?</h1>
+      <p className="text-blue-300 text-xs text-center mb-3 opacity-70">Выбери игроков (мин. 2) · тапни чтобы переименовать</p>
+      <AvatarPicker players={players} onToggle={togglePlayer} onRename={renamePlayer} borderColor="border-blue-400"/>
+      <button onClick={startGame} disabled={players.length<2}
+        className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xl active:scale-95 disabled:opacity-40 shadow-lg mt-4">
+        ИГРАТЬ ({players.length} чел.)
+      </button>
+    </div>
+  );
+
+  return(
+    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-stone-900 to-blue-950 flex flex-col p-4 relative">
+      <BackBtn onBack={()=>setPhase('setup')} light/>
+      <div className="bg-blue-900 bg-opacity-60 border border-blue-700 rounded-2xl p-4 mb-3 text-center">
+        <p className="text-blue-200 text-xs uppercase tracking-widest mb-1 opacity-60">Вопрос {qIdx+1}</p>
+        <p className="text-white text-base font-bold leading-snug">{questions[qIdx]}</p>
+      </div>
+      {!showResult&&!passing&&curVoter&&(
+        <>
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <img src={`chars/char${curVoter.charId}.jpg`} className="w-8 h-10 object-cover rounded-lg border border-blue-400" style={{objectPosition:'top'}}/>
+            <p className="text-blue-300 text-sm">Голосует: <span className="text-white font-bold">{curVoter.name}</span> ({voterIdx+1}/{players.length})</p>
+          </div>
+          <div className={`grid ${cols} gap-2 flex-1`}>
+            {players.map((pl,i)=>(
+              <button key={i} onClick={()=>vote(pl.name)}
+                className="flex flex-col items-center py-3 px-2 bg-blue-800 border-2 border-blue-600 rounded-2xl active:scale-95 active:bg-blue-600 transition-colors">
+                <img src={`chars/char${pl.charId}.jpg`} className="w-14 h-18 object-cover rounded-xl mb-1 border border-blue-500" style={{objectPosition:'top',height:'72px'}}/>
+                <span className="text-white font-bold text-xs leading-tight text-center">{pl.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {passing&&nextVoter&&(
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center pop">
+            <img src={`chars/char${nextVoter.charId}.jpg`} className="w-24 h-32 object-cover rounded-2xl mx-auto mb-3 border-2 border-blue-400" style={{objectPosition:'top'}}/>
+            <p className="text-white text-xl font-bold">Передай</p>
+            <p className="text-blue-300 text-xl font-bold">{nextVoter.name}</p>
+          </div>
+        </div>
+      )}
+      {showResult&&winnerPlayer&&(
+        <div className="flex-1 flex flex-col items-center justify-center text-center pop">
+          {tie&&<p className="text-blue-300 text-sm mb-2">Ничья!</p>}
+          <img src={`chars/char${winnerPlayer.charId}.jpg`} className="w-28 object-cover rounded-2xl mx-auto mb-3 border-4 border-yellow-400 shadow-xl" style={{height:'140px',objectPosition:'top'}}/>
+          <div className="text-4xl font-black text-yellow-300 mb-1">{winnerPlayer.name}</div>
+          <div className="text-2xl text-white mb-1">пьёт! 🍺</div>
+          <div className="text-blue-400 text-sm mb-5">{winnerEntry[1]} из {players.length} голосов</div>
+          <button onClick={nextQuestion} className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold text-base active:scale-95">Следующий вопрос →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════ 5. СВЕТОФОР ═══════════════ */
+const LIGHTS=[
+  {color:'#22c55e',bg:'from-green-900 to-green-950',emoji:'🟢',text:'ВСЕ ПЬЮТ!',sub:'Дружно, до дна 🍺'},
+  {color:'#eab308',bg:'from-yellow-800 to-yellow-950',emoji:'🟡',text:'СОСЕД СЛЕВА',sub:'Тот кто сидит слева пьёт'},
+  {color:'#ef4444',bg:'from-red-900 to-red-950',emoji:'🔴',text:'ТЫ ПЬЁШЬ!',sub:'Нажавший платит'},
+];
+
+function SvetoforGame({onBack}){
+  const[result,setResult]=useState(null);
+  const[animating,setAnimating]=useState(false);
+
+  function press(){
+    if(animating)return;
+    setAnimating(true);setResult(null);
+    setTimeout(()=>{
+      setResult(LIGHTS[Math.floor(Math.random()*LIGHTS.length)]);
+      setAnimating(false);
+    },400);
+  }
+
+  return(
+    <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center transition-colors duration-500 bg-gradient-to-br ${result?result.bg:'from-stone-900 to-stone-950'}`}>
+      <div className="absolute top-4 left-4"><BackBtn onBack={onBack} light/></div>
+      <h1 className="text-3xl font-black text-white mb-8">🚦 СВЕТОФОР</h1>
+      {result&&!animating&&(
+        <div className="mb-8 pop">
+          <div className="text-8xl mb-4">{result.emoji}</div>
+          <div className="text-4xl font-black text-white mb-2">{result.text}</div>
+          <div className="text-white opacity-70 text-base">{result.sub}</div>
+        </div>
+      )}
+      {animating&&<div className="text-8xl mb-8 animate-pulse">🚦</div>}
+      {!result&&!animating&&<div className="text-6xl mb-8 opacity-30">🚦</div>}
+      <button onClick={press} disabled={animating}
+        className="w-56 h-56 rounded-full bg-white bg-opacity-10 border-4 border-white border-opacity-30 text-white font-black text-3xl active:scale-90 transition-transform shadow-2xl disabled:opacity-50">
+        {animating?'...':'ЖМИ!'}
+      </button>
+      <p className="text-white opacity-40 text-xs mt-8">Жми каждый раз по кругу</p>
+    </div>
+  );
+}
+
+/* ═══════════════ 6. КНБ ═══════════════ */
+const MOVES=[{id:'r',emoji:'✊',name:'Камень'},{id:'p',emoji:'✋',name:'Бумага'},{id:'s',emoji:'✌️',name:'Ножницы'}];
+function knbWinner(a,b){
+  if(a===b)return'tie';
+  if((a==='r'&&b==='s')||(a==='p'&&b==='r')||(a==='s'&&b==='p'))return'p1';
+  return'p2';
+}
+
+function KNBGame({onBack}){
+  const[phase,setPhase]=useState('setup'); // setup | p1 | pass | p2 | result
+  const[avatar1,setAvatar1]=useState(null);
+  const[avatar2,setAvatar2]=useState(null);
+  const[p1move,setP1move]=useState(null);
+  const[p2move,setP2move]=useState(null);
+  const[scores,setScores]=useState({p1:0,p2:0});
+
+  function pickMove1(move){setP1move(move);setPhase('pass');}
+  function pickMove2(move){
+    setP2move(move);setPhase('result');
+    const w=knbWinner(p1move,move);
+    if(w!=='tie')setScores(s=>({...s,[w]:s[w]+1}));
+  }
+  function nextRound(){setP1move(null);setP2move(null);setPhase('p1');}
+
+  const mv1=MOVES.find(m=>m.id===p1move);
+  const mv2=MOVES.find(m=>m.id===p2move);
+  const outcome=p1move&&p2move?knbWinner(p1move,p2move):null;
+  const btnClass="aspect-square flex flex-col items-center justify-center rounded-3xl border-4 border-teal-500 bg-teal-900 text-white active:scale-90 transition-transform";
+
+  // Setup: pick 2 avatars
+  if(phase==='setup') return(
+    <div className="min-h-screen bg-gradient-to-br from-teal-950 via-stone-900 to-teal-950 flex flex-col p-4">
+      <BackBtn onBack={onBack} light/>
+      <h1 className="text-2xl font-black text-teal-100 text-center mb-1">✊ КНБ на пьянку</h1>
+      <p className="text-teal-300 text-xs text-center mb-3 opacity-70">Игрок 1 и Игрок 2 — выберите персонажей</p>
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        {[1,2,3,4,5,6,7,8].map(id=>{
+          const isA1=avatar1===id, isA2=avatar2===id;
+          return(
+            <button key={id} onClick={()=>{
+              if(isA1){setAvatar1(null);}
+              else if(isA2){setAvatar2(null);}
+              else if(!avatar1){setAvatar1(id);}
+              else if(!avatar2&&id!==avatar1){setAvatar2(id);}
+            }}
+              className={'w-full rounded-xl overflow-hidden border-2 transition-all active:scale-90 relative '+(isA1?'border-amber-400 shadow-lg':isA2?'border-cyan-400 shadow-lg':'border-stone-700 opacity-50')}>
+              <img src={`chars/char${id}.jpg`} className="w-full" style={{aspectRatio:'3/4',objectFit:'cover',objectPosition:'top'}}/>
+              {isA1&&<div className="absolute top-1 left-1 bg-amber-400 text-stone-900 text-xs font-black px-1.5 py-0.5 rounded-full">И1</div>}
+              {isA2&&<div className="absolute top-1 left-1 bg-cyan-400 text-stone-900 text-xs font-black px-1.5 py-0.5 rounded-full">И2</div>}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex gap-3 justify-center mb-4">
+        {avatar1?<div className="flex items-center gap-1 text-amber-300 text-sm"><img src={`chars/char${avatar1}.jpg`} className="w-8 h-10 object-cover rounded-lg border border-amber-400" style={{objectPosition:'top'}}/> Игрок 1 ✓</div>:<div className="text-stone-500 text-sm">Игрок 1 — не выбран</div>}
+        {avatar2?<div className="flex items-center gap-1 text-cyan-300 text-sm"><img src={`chars/char${avatar2}.jpg`} className="w-8 h-10 object-cover rounded-lg border border-cyan-400" style={{objectPosition:'top'}}/> Игрок 2 ✓</div>:<div className="text-stone-500 text-sm">Игрок 2 — не выбран</div>}
+      </div>
+      <button onClick={()=>setPhase('p1')} disabled={!avatar1||!avatar2}
+        className="w-full py-4 bg-teal-600 text-white rounded-2xl font-black text-xl active:scale-95 disabled:opacity-40 shadow-lg">
+        ИГРАТЬ
+      </button>
+    </div>
+  );
+
+  if(phase==='p1') return(
+    <div className="min-h-screen bg-gradient-to-br from-teal-950 via-stone-900 to-teal-950 flex flex-col p-4">
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2"><img src={`chars/char${avatar1}.jpg`} className="w-10 h-12 object-cover rounded-xl border-2 border-amber-400" style={{objectPosition:'top'}}/><span className="text-amber-300 font-bold text-sm">{scores.p1}</span></div>
+        <span className="text-stone-500 text-lg font-black">VS</span>
+        <div className="flex items-center gap-2"><span className="text-cyan-300 font-bold text-sm">{scores.p2}</span><img src={`chars/char${avatar2}.jpg`} className="w-10 h-12 object-cover rounded-xl border-2 border-cyan-400" style={{objectPosition:'top'}}/></div>
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <img src={`chars/char${avatar1}.jpg`} className="w-20 h-28 object-cover rounded-2xl mb-3 border-2 border-amber-400" style={{objectPosition:'top'}}/>
+        <p className="text-teal-200 text-sm opacity-70 mb-1">Спрячь от соперника</p>
+        <h2 className="text-2xl font-black text-white mb-6">Игрок 1 выбирает</h2>
+        <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
+          {MOVES.map(m=>(<button key={m.id} onClick={()=>pickMove1(m.id)} className={btnClass}><span className="text-5xl">{m.emoji}</span><span className="text-xs mt-1 opacity-70">{m.name}</span></button>))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if(phase==='pass') return(
+    <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center p-6 text-center">
+      <div className="text-6xl mb-4">📲</div>
+      <p className="text-stone-400 mb-2">Передай телефон</p>
+      <img src={`chars/char${avatar2}.jpg`} className="w-24 h-32 object-cover rounded-2xl mx-auto mb-3 border-2 border-cyan-400" style={{objectPosition:'top'}}/>
+      <p className="text-white text-xl font-black mb-8">Игрок 2</p>
+      <button onClick={()=>setPhase('p2')} className="px-8 py-4 bg-teal-600 text-white rounded-2xl font-black text-xl active:scale-95">Я готов →</button>
+    </div>
+  );
+
+  if(phase==='p2') return(
+    <div className="min-h-screen bg-gradient-to-br from-teal-950 via-stone-900 to-teal-950 flex flex-col p-4">
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <img src={`chars/char${avatar2}.jpg`} className="w-20 h-28 object-cover rounded-2xl mb-3 border-2 border-cyan-400" style={{objectPosition:'top'}}/>
+        <h2 className="text-2xl font-black text-white mb-6">Игрок 2 выбирает</h2>
+        <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
+          {MOVES.map(m=>(<button key={m.id} onClick={()=>pickMove2(m.id)} className={btnClass}><span className="text-5xl">{m.emoji}</span><span className="text-xs mt-1 opacity-70">{m.name}</span></button>))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return(
+    <div className="min-h-screen bg-gradient-to-br from-teal-950 via-stone-900 to-teal-950 flex flex-col items-center justify-center p-6 text-center">
+      <div className="flex gap-6 mb-5 pop">
+        <div className="text-center">
+          <img src={`chars/char${avatar1}.jpg`} className="w-20 h-28 object-cover rounded-2xl mx-auto mb-1 border-2 border-amber-400" style={{objectPosition:'top'}}/>
+          <div className="text-4xl">{mv1?.emoji}</div><div className="text-white text-xs mt-1">Игрок 1</div>
+        </div>
+        <div className="text-white text-2xl self-center font-black">VS</div>
+        <div className="text-center">
+          <img src={`chars/char${avatar2}.jpg`} className="w-20 h-28 object-cover rounded-2xl mx-auto mb-1 border-2 border-cyan-400" style={{objectPosition:'top'}}/>
+          <div className="text-4xl">{mv2?.emoji}</div><div className="text-white text-xs mt-1">Игрок 2</div>
+        </div>
+      </div>
+      {outcome==='tie'?<div className="text-3xl font-black text-yellow-300 mb-3">НИЧЬЯ!</div>:
+        <><div className="text-3xl font-black text-white mb-1">Игрок {outcome==='p1'?1:2} побеждает!</div><div className="text-xl text-red-400 mb-3">Игрок {outcome==='p1'?2:1} пьёт 🍺</div></>}
+      <div className="flex gap-4 mb-4 text-teal-300 text-sm font-bold">
+        <span>И1: {scores.p1}</span><span>|</span><span>И2: {scores.p2}</span>
+      </div>
+      <button onClick={nextRound} className="px-8 py-4 bg-teal-600 text-white rounded-2xl font-black text-xl active:scale-95 mb-3">Ещё раунд</button>
+      <button onClick={()=>{setPhase('setup');setAvatar1(null);setAvatar2(null);setScores({p1:0,p2:0});}} className="text-teal-400 text-sm active:opacity-50">Сменить игроков</button>
+    </div>
+  );
+}
+
+/* ═══════════════ APP ROOT ═══════════════ */
+function App(){
+  const[game,setGame]=useState(null);
+  const back=()=>setGame(null);
+  if(!game)return<HomeScreen onSelect={setGame}/>;
+  if(game==='roulette')return<RouletteGame onBack={back}/>;
+  if(game==='bomba')return<BombaGame onBack={back}/>;
+  if(game==='names')return<NamesGame onBack={back}/>;
+  if(game==='ktoiznas')return<KtoIzNasGame onBack={back}/>;
+  if(game==='svetofor')return<SvetoforGame onBack={back}/>;
+  if(game==='knb')return<KNBGame onBack={back}/>;
+  return<HomeScreen onSelect={setGame}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
