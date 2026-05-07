@@ -1170,7 +1170,7 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
         <div className="space-y-3">
           <p className="text-stone-400 text-xs">Выбери игру:</p>
           <div className="grid grid-cols-4 gap-2">
-            {MENU.map(g=>(
+            {MENU.filter(g=>g.id!=='bill').map(g=>(
               <button key={g.id} onClick={()=>setSelectedGame(g.id)}
                 className={`bg-gradient-to-br ${g.from} ${g.to} border ${g.border} rounded-xl p-2 text-center transition-all active:scale-95 `+(selectedGame===g.id?'ring-2 ring-white opacity-100':'opacity-50')}>
                 <div className="text-xl">{g.emoji}</div>
