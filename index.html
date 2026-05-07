@@ -15,6 +15,8 @@
 .particle { animation: particle-fly 2s ease-out forwards; }
 @keyframes flash-anim { 0%{opacity:0} 50%{opacity:0.6} 100%{opacity:0} }
 .flash { animation: flash-anim 0.2s; }
+@keyframes muzzle { 0%{opacity:1;transform:scale(0.5)} 100%{opacity:0;transform:scale(2.5)} }
+.muzzle-flash { animation: muzzle 0.18s ease-out forwards; }
 body { font-family: system-ui, -apple-system, sans-serif; }
 </style>
 </head>
@@ -23,92 +25,229 @@ body { font-family: system-ui, -apple-system, sans-serif; }
 <script type="text/babel" data-presets="react">
 const { useState } = React;
 
+function playGunshot() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.6, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / ctx.sampleRate;
+      const env = Math.exp(-t * 18);
+      data[i] = (Math.random() * 2 - 1) * env * (1 + 3 * Math.exp(-t * 60));
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 800;
+    const gain = ctx.createGain(); gain.gain.value = 2.5;
+    src.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+    src.start();
+  } catch(e) {}
+}
+
 function BeerMug() {
   return (<svg viewBox="0 0 100 100" className="w-full h-full">
-    <defs>
-      <linearGradient id="beerGrad" x1="0" x2="0" y1="0" y2="1">
-        <stop offset="0%" stopColor="#fde68a" /><stop offset="50%" stopColor="#f59e0b" /><stop offset="100%" stopColor="#b45309" />
-      </linearGradient>
-    </defs>
-    <rect x="22" y="22" width="48" height="60" rx="3" fill="url(#beerGrad)" stroke="#78350f" strokeWidth="1.5" />
-    <ellipse cx="46" cy="22" rx="24" ry="8" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5" />
-    <circle cx="35" cy="18" r="5" fill="#fffbeb" />
-    <circle cx="50" cy="15" r="6" fill="#fffbeb" />
-    <circle cx="60" cy="19" r="4" fill="#fffbeb" />
-    <path d="M 70 35 Q 88 38 88 55 Q 88 72 70 72" fill="none" stroke="#78350f" strokeWidth="4" />
-    <circle cx="38" cy="50" r="2" fill="#fffbeb" opacity="0.8" />
-    <circle cx="52" cy="62" r="1.5" fill="#fffbeb" opacity="0.8" />
-    <circle cx="46" cy="70" r="2" fill="#fffbeb" opacity="0.8" />
+    <defs><linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stopColor="#fde68a"/><stop offset="50%" stopColor="#f59e0b"/><stop offset="100%" stopColor="#b45309"/>
+    </linearGradient></defs>
+    <rect x="22" y="22" width="48" height="60" rx="3" fill="url(#bg)" stroke="#78350f" strokeWidth="1.5"/>
+    <ellipse cx="46" cy="22" rx="24" ry="8" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5"/>
+    <circle cx="35" cy="18" r="5" fill="#fffbeb"/><circle cx="50" cy="15" r="6" fill="#fffbeb"/><circle cx="60" cy="19" r="4" fill="#fffbeb"/>
+    <path d="M 70 35 Q 88 38 88 55 Q 88 72 70 72" fill="none" stroke="#78350f" strokeWidth="4"/>
+    <circle cx="38" cy="50" r="2" fill="#fffbeb" opacity="0.8"/><circle cx="52" cy="62" r="1.5" fill="#fffbeb" opacity="0.8"/><circle cx="46" cy="70" r="2" fill="#fffbeb" opacity="0.8"/>
   </svg>);
 }
 
 function BrokenMug() {
   return (<svg viewBox="0 0 100 100" className="w-full h-full">
-    <ellipse cx="50" cy="80" rx="40" ry="10" fill="#b45309" opacity="0.7" />
-    <ellipse cx="50" cy="78" rx="35" ry="7" fill="#fde68a" opacity="0.5" />
-    <path d="M 18 30 L 28 22 L 32 50 L 22 70 L 12 60 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(-25 22 50)" />
-    <path d="M 60 25 L 78 28 L 80 55 L 68 65 L 62 45 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(20 70 45)" />
-    <path d="M 40 8 L 55 5 L 60 18 L 50 22 L 38 18 Z" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5" />
-    <circle cx="20" cy="55" r="2" fill="#f59e0b" />
-    <circle cx="80" cy="60" r="2.5" fill="#f59e0b" />
+    <ellipse cx="50" cy="80" rx="40" ry="10" fill="#b45309" opacity="0.7"/>
+    <ellipse cx="50" cy="78" rx="35" ry="7" fill="#fde68a" opacity="0.5"/>
+    <path d="M 18 30 L 28 22 L 32 50 L 22 70 L 12 60 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(-25 22 50)"/>
+    <path d="M 60 25 L 78 28 L 80 55 L 68 65 L 62 45 Z" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" transform="rotate(20 70 45)"/>
+    <path d="M 40 8 L 55 5 L 60 18 L 50 22 L 38 18 Z" fill="#fffbeb" stroke="#78350f" strokeWidth="1.5"/>
+    <circle cx="20" cy="55" r="2" fill="#f59e0b"/><circle cx="80" cy="60" r="2.5" fill="#f59e0b"/>
   </svg>);
 }
 
-function Revolver({ rotation, spinning }) {
-  return (<div className="relative"><svg viewBox="0 0 300 180" className="w-72 h-44 drop-shadow-2xl">
-    <defs>
-      <linearGradient id="metal" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#9ca3af" /><stop offset="100%" stopColor="#1f2937" /></linearGradient>
-      <linearGradient id="metalDark" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#6b7280" /><stop offset="100%" stopColor="#111827" /></linearGradient>
-      <linearGradient id="grip" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#78350f" /><stop offset="100%" stopColor="#451a03" /></linearGradient>
-      <radialGradient id="chamber" cx="0.5" cy="0.5"><stop offset="0%" stopColor="#1f2937" /><stop offset="100%" stopColor="#000" /></radialGradient>
-    </defs>
-    <rect x="155" y="62" width="120" height="20" rx="3" fill="url(#metal)" />
-    <circle cx="272" cy="72" r="6" fill="#000" />
-    <g style={{ transformOrigin: '100px 90px', transform: 'rotate(' + rotation + 'deg)', transition: spinning ? 'transform 0.8s cubic-bezier(0.2, 0.8, 0.4, 1)' : 'none' }}>
-      <circle cx="100" cy="90" r="42" fill="url(#metalDark)" stroke="#1f2937" strokeWidth="2" />
-      {[0,1,2,3,4,5].map(i => {
-        const angle = (i/6)*Math.PI*2 - Math.PI/2;
-        const cx = 100 + Math.cos(angle)*25;
-        const cy = 90 + Math.sin(angle)*25;
-        return (<g key={i}><circle cx={cx} cy={cy} r="8" fill="url(#chamber)" stroke="#374151" strokeWidth="1" /><circle cx={cx} cy={cy} r="4" fill="#000" /></g>);
-      })}
-      <circle cx="100" cy="90" r="6" fill="#374151" />
-    </g>
-    <path d="M 142 75 L 155 70 L 155 85 L 142 80 Z" fill="url(#metal)" />
-    <path d="M 90 130 Q 90 155 115 155 Q 130 155 130 130" fill="none" stroke="url(#metalDark)" strokeWidth="6" strokeLinecap="round" />
-    <path d="M 60 90 Q 50 100 50 130 Q 50 165 75 170 L 95 165 Q 100 140 100 130 L 100 105 Z" fill="url(#grip)" stroke="#1c1917" strokeWidth="1.5" />
-  </svg></div>);
+/* ── Revolver 1: Classic Steel — 1 bullet ── */
+function RevolverClassic({ rotation, spinning, muzzle }) {
+  return (
+    <svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl">
+      <defs>
+        <linearGradient id="c1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#c4c9d4"/><stop offset="100%" stopColor="#1f2937"/></linearGradient>
+        <linearGradient id="c2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#6b7280"/><stop offset="100%" stopColor="#111827"/></linearGradient>
+        <linearGradient id="c3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#92400e"/><stop offset="100%" stopColor="#451a03"/></linearGradient>
+        <radialGradient id="c4"><stop offset="0%" stopColor="#374151"/><stop offset="100%" stopColor="#000"/></radialGradient>
+      </defs>
+      {/* barrel */}
+      <rect x="148" y="60" width="128" height="22" rx="4" fill="url(#c1)"/>
+      <rect x="149" y="61" width="126" height="7" rx="3" fill="rgba(255,255,255,0.15)"/>
+      <rect x="148" y="74" width="128" height="6" rx="2" fill="url(#c2)"/>
+      <circle cx="273" cy="71" r="7" fill="#0a0a0a" stroke="#374151" strokeWidth="1"/>
+      {muzzle && <circle cx="278" cy="71" r="16" fill="rgba(255,210,60,0.85)" className="muzzle-flash"/>}
+      {/* cylinder */}
+      <g style={{transformOrigin:'100px 90px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}>
+        <circle cx="100" cy="90" r="44" fill="url(#c2)" stroke="#374151" strokeWidth="2"/>
+        <circle cx="100" cy="90" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2"/>
+        {[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=90+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#c4)" stroke="#4b5563" strokeWidth="1.5"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}
+        <circle cx="100" cy="90" r="7" fill="#374151"/>
+        <circle cx="100" cy="90" r="3" fill="#1f2937"/>
+      </g>
+      {/* frame connector */}
+      <path d="M 144 72 L 148 63 L 148 82 L 144 78 Z" fill="url(#c1)"/>
+      {/* trigger guard */}
+      <path d="M 88 132 Q 88 158 114 158 Q 132 158 132 132" fill="none" stroke="url(#c2)" strokeWidth="7" strokeLinecap="round"/>
+      {/* grip */}
+      <path d="M 58 90 Q 46 104 46 136 Q 46 170 74 174 L 96 168 Q 102 144 102 132 L 102 106 Z" fill="url(#c3)" stroke="#3b1206" strokeWidth="2"/>
+      <path d="M 55 108 Q 52 128 53 148 Q 54 162 62 172" fill="none" stroke="rgba(255,200,150,0.12)" strokeWidth="5" strokeLinecap="round"/>
+    </svg>
+  );
 }
 
+/* ── Revolver 2: Gold Desert — 3 bullets ── */
+function RevolverGold({ rotation, spinning, muzzle }) {
+  return (
+    <svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl">
+      <defs>
+        <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#fef08a"/><stop offset="45%" stopColor="#eab308"/><stop offset="100%" stopColor="#713f12"/></linearGradient>
+        <linearGradient id="g2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#fcd34d"/><stop offset="100%" stopColor="#78350f"/></linearGradient>
+        <linearGradient id="g3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#f5f5f4"/><stop offset="100%" stopColor="#a8a29e"/></linearGradient>
+        <radialGradient id="g4"><stop offset="0%" stopColor="#292524"/><stop offset="100%" stopColor="#000"/></radialGradient>
+      </defs>
+      {/* long ornate barrel */}
+      <rect x="148" y="61" width="132" height="20" rx="3" fill="url(#g1)" stroke="#92400e" strokeWidth="0.5"/>
+      <rect x="149" y="62" width="130" height="5" rx="2" fill="rgba(255,255,200,0.3)"/>
+      {/* engraving lines */}
+      <path d="M 162 66 Q 180 63 198 66 Q 216 69 234 66 Q 252 63 268 66" fill="none" stroke="rgba(120,53,15,0.35)" strokeWidth="1"/>
+      <path d="M 162 73 Q 180 76 198 73 Q 216 70 234 73 Q 252 76 268 73" fill="none" stroke="rgba(120,53,15,0.25)" strokeWidth="0.8"/>
+      <circle cx="277" cy="71" r="7" fill="#1c0f00" stroke="#92400e" strokeWidth="1"/>
+      {muzzle && <circle cx="282" cy="71" r="16" fill="rgba(255,230,50,0.9)" className="muzzle-flash"/>}
+      {/* cylinder */}
+      <g style={{transformOrigin:'100px 88px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}>
+        <circle cx="100" cy="88" r="44" fill="url(#g2)" stroke="#92400e" strokeWidth="2"/>
+        <circle cx="100" cy="88" r="40" fill="none" stroke="rgba(255,220,100,0.18)" strokeWidth="2"/>
+        <circle cx="100" cy="88" r="34" fill="none" stroke="rgba(255,220,100,0.08)" strokeWidth="1" strokeDasharray="6 3"/>
+        {[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=88+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#g4)" stroke="#b45309" strokeWidth="1.5"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}
+        <circle cx="100" cy="88" r="7" fill="#b45309"/>
+        <circle cx="100" cy="88" r="3" fill="#78350f"/>
+      </g>
+      <path d="M 144 72 L 148 63 L 148 82 L 144 78 Z" fill="url(#g1)"/>
+      <path d="M 88 130 Q 88 156 114 158 Q 132 156 132 130" fill="none" stroke="url(#g1)" strokeWidth="7" strokeLinecap="round"/>
+      {/* ivory grip */}
+      <path d="M 58 88 Q 46 102 46 134 Q 46 168 74 172 L 96 166 Q 102 142 102 130 L 102 104 Z" fill="url(#g3)" stroke="#d6d3d1" strokeWidth="1.5"/>
+      <path d="M 62 106 Q 59 124 60 144 Q 61 160 70 170" fill="none" stroke="rgba(160,140,100,0.25)" strokeWidth="3" strokeLinecap="round"/>
+      <path d="M 72 106 Q 69 124 70 144 Q 71 160 79 170" fill="none" stroke="rgba(160,140,100,0.15)" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+/* ── Revolver 3: Neon Skull — 5 bullets ── */
+function RevolverNeon({ rotation, spinning, muzzle }) {
+  return (
+    <svg viewBox="0 0 300 180" className="w-full h-full drop-shadow-2xl">
+      <defs>
+        <linearGradient id="n1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#c084fc"/><stop offset="100%" stopColor="#1a0033"/></linearGradient>
+        <linearGradient id="n2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#7c3aed"/><stop offset="100%" stopColor="#0a0015"/></linearGradient>
+        <linearGradient id="n3" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#3b0764"/><stop offset="100%" stopColor="#050010"/></linearGradient>
+        <radialGradient id="n4"><stop offset="0%" stopColor="#2e1065"/><stop offset="100%" stopColor="#000"/></radialGradient>
+        <filter id="nglow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2.5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      {/* barrel — angular, aggressive */}
+      <polygon points="148,58 276,58 280,66 280,78 276,84 148,84 144,76 144,66" fill="url(#n3)" stroke="#a855f7" strokeWidth="1"/>
+      <rect x="149" y="59" width="128" height="5" rx="1" fill="rgba(200,132,252,0.25)"/>
+      <rect x="149" y="79" width="128" height="4" rx="1" fill="rgba(124,58,237,0.3)"/>
+      {/* top rail */}
+      <rect x="148" y="55" width="128" height="4" rx="1" fill="#4c1d95"/>
+      <rect x="152" y="56" width="6" height="2" fill="#7c3aed"/>
+      <rect x="164" y="56" width="6" height="2" fill="#7c3aed"/>
+      <rect x="176" y="56" width="6" height="2" fill="#7c3aed"/>
+      <rect x="188" y="56" width="6" height="2" fill="#7c3aed"/>
+      <circle cx="278" cy="71" r="7" fill="#050010" stroke="#a855f7" strokeWidth="1.5"/>
+      <circle cx="278" cy="71" r="4" fill="#000"/>
+      {muzzle && <circle cx="283" cy="71" r="16" fill="rgba(200,80,255,0.9)" className="muzzle-flash"/>}
+      {/* cylinder */}
+      <g style={{transformOrigin:'100px 90px',transform:`rotate(${rotation}deg)`,transition:spinning?'transform 0.8s cubic-bezier(0.2,0.8,0.4,1)':'none'}}>
+        <circle cx="100" cy="90" r="44" fill="url(#n2)" stroke="#a855f7" strokeWidth="2" filter="url(#nglow)"/>
+        <circle cx="100" cy="90" r="40" fill="none" stroke="rgba(168,85,247,0.3)" strokeWidth="2"/>
+        <circle cx="100" cy="90" r="32" fill="none" stroke="rgba(168,85,247,0.15)" strokeWidth="1" strokeDasharray="4 2"/>
+        {[0,1,2,3,4,5].map(i=>{const a=(i/6)*Math.PI*2-Math.PI/2,cx=100+Math.cos(a)*26,cy=90+Math.sin(a)*26;return(<g key={i}><circle cx={cx} cy={cy} r="9" fill="url(#n4)" stroke="#a855f7" strokeWidth="1.5" filter="url(#nglow)"/><circle cx={cx} cy={cy} r="4.5" fill="#000"/></g>);})}
+        <circle cx="100" cy="90" r="8" fill="#7c3aed"/>
+        <circle cx="100" cy="90" r="4" fill="#000"/>
+        {/* skull shape in center */}
+        <ellipse cx="100" cy="89" rx="5" ry="4.5" fill="none" stroke="rgba(200,132,252,0.5)" strokeWidth="0.8"/>
+        <circle cx="98" cy="88" r="1" fill="rgba(200,132,252,0.6)"/>
+        <circle cx="102" cy="88" r="1" fill="rgba(200,132,252,0.6)"/>
+      </g>
+      <polygon points="144,68 148,61 148,82 144,78" fill="url(#n3)" stroke="#7c3aed" strokeWidth="0.5"/>
+      <path d="M 88 132 Q 88 158 114 160 Q 132 158 132 132" fill="none" stroke="url(#n2)" strokeWidth="7" strokeLinecap="round"/>
+      {/* grip */}
+      <path d="M 58 90 Q 46 104 46 136 Q 46 170 74 174 L 96 168 Q 102 144 102 132 L 102 106 Z" fill="url(#n3)" stroke="#7c3aed" strokeWidth="1.5"/>
+      {/* neon lines on grip */}
+      <path d="M 52 112 L 96 112" stroke="rgba(168,85,247,0.4)" strokeWidth="1"/>
+      <path d="M 50 124 L 96 124" stroke="rgba(168,85,247,0.3)" strokeWidth="1"/>
+      <path d="M 50 136 L 95 136" stroke="rgba(168,85,247,0.2)" strokeWidth="1"/>
+      <path d="M 52 148 L 93 148" stroke="rgba(168,85,247,0.15)" strokeWidth="1"/>
+    </svg>
+  );
+}
+
+const REVOLVERS = [
+  { id: 0, name: 'Классика', bullets: 1, label: '1 патрон', difficulty: 'Легко', diffColor: 'text-green-400', render: RevolverClassic },
+  { id: 1, name: 'Золотой', bullets: 3, label: '3 патрона', difficulty: 'Средне', diffColor: 'text-yellow-400', render: RevolverGold },
+  { id: 2, name: 'Неон', bullets: 5, label: '5 патронов', difficulty: 'Хардкор', diffColor: 'text-red-400', render: RevolverNeon },
+];
+
 function App() {
-  const [chambers, setChambers] = useState(() => initGame());
+  const [revolverIdx, setRevolverIdx] = useState(0);
+  const [chambers, setChambers] = useState(() => initGame(1));
   const [revealed, setRevealed] = useState([]);
   const [gameOver, setGameOver] = useState(false);
   const [currentPlayer, setCurrentPlayer] = useState(1);
   const [mode, setMode] = useState('solo');
   const [scores, setScores] = useState({ p1: 0, p2: 0 });
-  const [message, setMessage] = useState('Крути барабан и выбирай кружку...');
+  const [message, setMessage] = useState('Выбери ствол и крути барабан...');
   const [spinning, setSpinning] = useState(false);
   const [particles, setParticles] = useState([]);
   const [drumRotation, setDrumRotation] = useState(0);
   const [flash, setFlash] = useState(false);
   const [shake, setShake] = useState(false);
+  const [muzzle, setMuzzle] = useState(false);
 
-  function initGame() {
+  function initGame(b) {
     const arr = [false,false,false,false,false,false];
-    arr[Math.floor(Math.random()*6)] = true;
+    const pos = [];
+    while (pos.length < b) { const p = Math.floor(Math.random()*6); if (!pos.includes(p)) pos.push(p); }
+    pos.forEach(p => arr[p] = true);
     return arr;
   }
 
-  function reset(keepScores = true) {
-    setChambers(initGame());
+  function reset(keepScores = true, b) {
+    const bullets = b !== undefined ? b : REVOLVERS[revolverIdx].bullets;
+    setChambers(initGame(bullets));
     setRevealed([]);
     setGameOver(false);
     setCurrentPlayer(1);
     setMessage(mode === 'solo' ? 'Крути барабан и выбирай кружку...' : 'Игрок 1, твой ход');
     setParticles([]);
     setSpinning(false);
+    setMuzzle(false);
     if (!keepScores) setScores({ p1: 0, p2: 0 });
+  }
+
+  function pickRevolver(i) {
+    setRevolverIdx(i);
+    const b = REVOLVERS[i].bullets;
+    setChambers(initGame(b));
+    setRevealed([]);
+    setGameOver(false);
+    setCurrentPlayer(1);
+    setMessage('Крути барабан и выбирай кружку...');
+    setParticles([]);
+    setSpinning(false);
+    setMuzzle(false);
+    setScores({ p1: 0, p2: 0 });
   }
 
   function spawnParticles(x, y) {
@@ -117,7 +256,7 @@ function App() {
     for (let i = 0; i < 35; i++) {
       const angle = (Math.PI*2*i)/35 + Math.random()*0.5;
       const speed = 80 + Math.random()*200;
-      list.push({ id: i, x, y, dx: Math.cos(angle)*speed, dy: Math.sin(angle)*speed - 80, emoji: emojis[Math.floor(Math.random()*emojis.length)], rotation: Math.random()*720 - 360, scale: 0.5 + Math.random()*1.3 });
+      list.push({ id: i, x, y, dx: Math.cos(angle)*speed, dy: Math.sin(angle)*speed - 80, emoji: emojis[Math.floor(Math.random()*emojis.length)], rotation: Math.random()*720-360, scale: 0.5+Math.random()*1.3 });
     }
     setParticles(list);
     setTimeout(() => setParticles([]), 2500);
@@ -132,75 +271,118 @@ function App() {
       const newRevealed = [...revealed, idx];
       setRevealed(newRevealed);
       if (chambers[idx]) {
-        setFlash(true);
-        setShake(true);
-        setTimeout(() => setFlash(false), 200);
-        setTimeout(() => setShake(false), 600);
-        const cell = document.getElementById('cell-' + idx);
-        if (cell) {
-          const rect = cell.getBoundingClientRect();
-          spawnParticles(rect.left + rect.width/2, rect.top + rect.height/2);
-        }
+        playGunshot();
+        setMuzzle(true); setTimeout(() => setMuzzle(false), 200);
+        setFlash(true); setTimeout(() => setFlash(false), 200);
+        setShake(true); setTimeout(() => setShake(false), 600);
+        const cell = document.getElementById('cell-'+idx);
+        if (cell) { const r = cell.getBoundingClientRect(); spawnParticles(r.left+r.width/2, r.top+r.height/2); }
         setGameOver(true);
         if (mode === 'solo') {
-          setMessage('💥 Крах! Кружка ' + (idx+1) + ' разбилась. Ты пьёшь штрафную!');
+          setMessage('💥 Крах! Кружка '+(idx+1)+' разбилась. Пьёшь штрафную!');
         } else {
-          const loser = currentPlayer;
-          const winner = currentPlayer === 1 ? 2 : 1;
-          setMessage('💥 Игрок ' + loser + ' разбил кружку! Победил Игрок ' + winner + ' 🍻');
-          setScores(s => ({ ...s, [winner === 1 ? 'p1' : 'p2']: s[winner === 1 ? 'p1' : 'p2'] + 1 }));
+          const loser = currentPlayer, winner = currentPlayer === 1 ? 2 : 1;
+          setMessage('💥 Игрок '+loser+' разбил кружку! Победил Игрок '+winner+' 🍻');
+          setScores(s => ({ ...s, [winner===1?'p1':'p2']: s[winner===1?'p1':'p2']+1 }));
         }
       } else {
         const remaining = 6 - newRevealed.length;
         if (mode === 'solo') {
-          if (remaining === 1) { setMessage('🎉 Невероятно! Все кружки целы!'); setGameOver(true); }
-          else { setMessage('🍺 Кружка цела! Осталось ' + remaining + '.'); }
+          if (remaining === 0) { setMessage('🎉 Невероятно! Все кружки целы!'); setGameOver(true); }
+          else { setMessage('🍺 Цела! Осталось '+remaining+'.'); }
         } else {
           const next = currentPlayer === 1 ? 2 : 1;
           setCurrentPlayer(next);
-          setMessage('🍺 Кружка цела! Игрок ' + next + ', твой ход');
+          setMessage('🍺 Цела! Игрок '+next+', твой ход');
         }
       }
     }, 800);
   }
 
-  return (<div className={'min-h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex items-center justify-center p-6 overflow-hidden relative ' + (shake ? 'animate-shake' : '')}>
-    {flash && <div className="fixed inset-0 bg-amber-300 pointer-events-none flash z-50" />}
-    <div className="fixed inset-0 pointer-events-none z-40">
-      {particles.map(p => (<div key={p.id} className="absolute particle text-3xl" style={{ left: p.x, top: p.y, '--tx': p.dx + 'px', '--ty': p.dy + 'px', '--rot': p.rotation + 'deg', transform: 'scale(' + p.scale + ')' }}>{p.emoji}</div>))}
+  const rev = REVOLVERS[revolverIdx];
+  const RevolverComp = rev.render;
+
+  return (
+    <div className={'min-h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex items-start justify-center py-4 px-3 overflow-x-hidden relative ' + (shake ? 'animate-shake' : '')}>
+      {flash && <div className="fixed inset-0 bg-amber-300 pointer-events-none flash z-50"/>}
+      <div className="fixed inset-0 pointer-events-none z-40">
+        {particles.map(p => (<div key={p.id} className="absolute particle text-2xl" style={{left:p.x,top:p.y,'--tx':p.dx+'px','--ty':p.dy+'px','--rot':p.rotation+'deg',transform:'scale('+p.scale+')'}}>{p.emoji}</div>))}
+      </div>
+
+      <div className="max-w-lg w-full relative z-10">
+        {/* Title */}
+        <div className="text-center mb-2">
+          <h1 className="text-3xl sm:text-5xl font-black text-amber-100 mb-0.5 tracking-tight" style={{textShadow:'0 0 30px rgba(251,191,36,0.5)'}}>🍺 ПИВНАЯ РУЛЕТКА</h1>
+          <p className="text-amber-200 opacity-50 text-xs sm:text-sm">{6-rev.bullets} целых · {rev.bullets} взрывных</p>
+        </div>
+
+        {/* Active revolver */}
+        <div className="flex justify-center mb-2">
+          <div className="w-52 h-32 sm:w-72 sm:h-44">
+            <RevolverComp rotation={drumRotation} spinning={spinning} muzzle={muzzle}/>
+          </div>
+        </div>
+
+        {/* Revolver selector */}
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {REVOLVERS.map((r, i) => {
+            const Comp = r.render;
+            const active = revolverIdx === i;
+            return (
+              <button key={r.id} onClick={() => pickRevolver(i)}
+                className={'rounded-xl border-2 p-1.5 text-center transition-all duration-200 active:scale-95 ' + (active ? 'border-amber-400 bg-stone-700 shadow-lg shadow-amber-900/40' : 'border-stone-600 bg-stone-800')}>
+                <div className="h-12 sm:h-16 mb-0.5"><Comp rotation={0} spinning={false} muzzle={false}/></div>
+                <div className={'text-xs sm:text-sm font-bold ' + (active?'text-amber-200':'text-stone-400')}>{r.name}</div>
+                <div className={'text-xs ' + r.diffColor}>{r.label}</div>
+                <div className={'text-xs opacity-70 ' + r.diffColor}>{r.difficulty}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Mode */}
+        <div className="flex gap-2 mb-2 justify-center">
+          <button onClick={() => { setMode('solo'); reset(false); }}
+            className={'flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-sm transition-all active:scale-95 ' + (mode==='solo'?'bg-amber-400 text-stone-900 shadow-lg':'bg-stone-800 text-amber-200')}>👤 СОЛО</button>
+          <button onClick={() => { setMode('duel'); reset(false); }}
+            className={'flex items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-sm transition-all active:scale-95 ' + (mode==='duel'?'bg-orange-500 text-white shadow-lg':'bg-stone-800 text-amber-200')}>👥 ДУЭЛЬ</button>
+        </div>
+
+        {/* Message */}
+        <div className="bg-stone-800 bg-opacity-80 backdrop-blur border border-amber-700 rounded-xl px-4 py-3 mb-3 text-center shadow-xl">
+          {mode==='duel' && !gameOver && (<div className="text-xs uppercase tracking-widest text-amber-200 opacity-50 mb-1">Ход: <span className={currentPlayer===1?'text-amber-300':'text-orange-400'}>Игрок {currentPlayer}</span></div>)}
+          <div className="text-base sm:text-lg text-amber-50 font-medium leading-snug" style={{minHeight:'24px'}}>{message}</div>
+          {mode==='duel' && (<div className="flex justify-center gap-6 mt-2 text-sm font-bold"><div className="text-amber-300">Игрок 1: {scores.p1}</div><div className="text-orange-400">Игрок 2: {scores.p2}</div></div>)}
+        </div>
+
+        {/* Chambers */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-3">
+          {chambers.map((isLose, idx) => {
+            const isRevealed = revealed.includes(idx);
+            const showResult = isRevealed || gameOver;
+            return (
+              <button id={'cell-'+idx} key={idx} onClick={() => pick(idx)} disabled={isRevealed||gameOver||spinning}
+                className={'aspect-square rounded-xl sm:rounded-2xl transition-all duration-300 relative overflow-hidden p-1.5 sm:p-2 active:scale-95 '+(
+                  !showResult ? 'bg-gradient-to-br from-stone-700 to-stone-900 cursor-pointer border-2 border-amber-700'
+                  : isLose ? 'bg-gradient-to-br from-red-700 via-amber-800 to-stone-900 border-2 border-red-500 shadow-2xl'
+                  : 'bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-300 shadow-lg'
+                )+(spinning?' animate-pulse':'')}>
+                {!showResult
+                  ? (<div className="flex items-center justify-center h-full"><span className="text-2xl sm:text-3xl text-amber-200 opacity-40 font-mono font-bold">{idx+1}</span></div>)
+                  : isLose ? <BrokenMug/> : <BeerMug/>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex gap-2 justify-center flex-wrap mb-3">
+          <button onClick={() => reset(true)} className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-orange-500 text-stone-900 rounded-lg font-bold active:scale-95 transition-transform shadow-lg text-sm">🔄 ЕЩЁ ПО ОДНОЙ</button>
+          {mode==='duel' && (<button onClick={() => reset(false)} className="px-5 py-2.5 bg-stone-800 text-amber-200 rounded-lg font-bold active:scale-95 transition-colors text-sm">СБРОС СЧЁТА</button>)}
+        </div>
+        <div className="text-center text-xs text-amber-200 opacity-30 pb-2">🍻 Пейте ответственно. Это просто игра.</div>
+      </div>
     </div>
-    <div className="max-w-2xl w-full relative z-10">
-      <div className="text-center mb-6">
-        <h1 className="text-5xl font-black text-amber-100 mb-2 tracking-tight" style={{ textShadow: '0 0 30px rgba(251,191,36,0.5)' }}>🍺 ПИВНАЯ РУЛЕТКА</h1>
-        <p className="text-amber-200 opacity-60 text-sm">5 целых кружек · 1 ловушка</p>
-      </div>
-      <div className="flex justify-center mb-6"><Revolver rotation={drumRotation} spinning={spinning} /></div>
-      <div className="flex gap-2 mb-5 justify-center">
-        <button onClick={() => { setMode('solo'); reset(false); }} className={'flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all ' + (mode === 'solo' ? 'bg-amber-400 text-stone-900 shadow-lg' : 'bg-stone-800 text-amber-200 hover:bg-stone-700')}>👤 СОЛО</button>
-        <button onClick={() => { setMode('duel'); reset(false); }} className={'flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-sm transition-all ' + (mode === 'duel' ? 'bg-orange-500 text-white shadow-lg' : 'bg-stone-800 text-amber-200 hover:bg-stone-700')}>👥 ДУЭЛЬ</button>
-      </div>
-      <div className="bg-stone-800 bg-opacity-80 backdrop-blur border border-amber-700 rounded-2xl p-5 mb-6 text-center shadow-xl">
-        {mode === 'duel' && !gameOver && (<div className="text-xs uppercase tracking-widest text-amber-200 opacity-50 mb-2">Ход: <span className={currentPlayer === 1 ? 'text-amber-300' : 'text-orange-400'}>Игрок {currentPlayer}</span></div>)}
-        <div className="text-lg text-amber-50 font-medium" style={{minHeight:'28px'}}>{message}</div>
-        {mode === 'duel' && (<div className="flex justify-center gap-6 mt-3 text-sm font-bold"><div className="text-amber-300">Игрок 1: {scores.p1}</div><div className="text-orange-400">Игрок 2: {scores.p2}</div></div>)}
-      </div>
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {chambers.map((isLose, idx) => {
-          const isRevealed = revealed.includes(idx);
-          const showResult = isRevealed || gameOver;
-          return (<button id={'cell-' + idx} key={idx} onClick={() => pick(idx)} disabled={isRevealed || gameOver || spinning}
-            className={'aspect-square rounded-2xl transition-all duration-300 relative overflow-hidden p-2 ' + (!showResult ? 'bg-gradient-to-br from-stone-700 to-stone-900 hover:from-stone-600 hover:to-stone-800 cursor-pointer hover:scale-105 hover:shadow-2xl border-2 border-amber-700' : isLose ? 'bg-gradient-to-br from-red-700 via-amber-800 to-stone-900 border-2 border-red-500 shadow-2xl' : 'bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-300 shadow-lg') + (spinning ? ' animate-pulse' : '')}>
-            {!showResult ? (<div className="flex items-center justify-center h-full"><span className="text-3xl text-amber-200 opacity-40 font-mono font-bold">{idx + 1}</span></div>) : isLose ? <BrokenMug /> : <BeerMug />}
-          </button>);
-        })}
-      </div>
-      <div className="flex gap-3 justify-center flex-wrap">
-        <button onClick={() => reset(true)} className="px-6 py-3 bg-gradient-to-r from-amber-400 to-orange-500 text-stone-900 rounded-lg font-bold hover:scale-105 transition-transform shadow-lg">🔄 ЕЩЁ ПО ОДНОЙ</button>
-        {mode === 'duel' && (<button onClick={() => reset(false)} className="px-6 py-3 bg-stone-800 text-amber-200 rounded-lg font-bold hover:bg-stone-700 transition-colors">СБРОС СЧЁТА</button>)}
-      </div>
-      <div className="text-center mt-6 text-xs text-amber-200 opacity-30">🍻 Пейте ответственно. Это просто игра.</div>
-    </div>
-  </div>);
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
