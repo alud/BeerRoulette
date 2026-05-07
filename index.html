@@ -1145,7 +1145,7 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
     else firebase.database().ref('rooms/'+code+'/players/'+playerId).remove();
     onBack();
   }
-  const joinUrl=`https://alud.github.io/BearRoulette/?room=${code}`;
+  const joinUrl=`https://alud.github.io/BeerRoulette/?room=${code}`;
   function copyCode(){
     if(navigator.clipboard){navigator.clipboard.writeText(joinUrl);}
     else{window.prompt('Скопируй ссылку:',joinUrl);}
