@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
@@ -949,12 +950,16 @@ function OnlineSetup({onBack,onDone}){
   const[error,setError]=useState('');
 
   useEffect(()=>{
+    const rp=new URLSearchParams(window.location.search).get('room');
     firebase.database().ref('users/'+getPlayerId()).get().then(snap=>{
       if(snap.exists()){
         const p=snap.val();
         if(p.name)setName(p.name);
         if(p.charIdx){setAvatarType('preset');setCharIdx(p.charIdx);}
         else{setAvatarType('custom');if(p.gender)setGender(p.gender);if(p.faceIdx!=null)setFaceIdx(p.faceIdx);}
+        if(rp&&rp.length===4){setCode(rp.toUpperCase());setStep('joining');}
+      } else {
+        if(rp&&rp.length===4){setCode(rp.toUpperCase());}
       }
       setProfileLoading(false);
     }).catch(()=>setProfileLoading(false));
@@ -1048,7 +1053,7 @@ function OnlineSetup({onBack,onDone}){
       {avatarType==='preset'&&(
         <div className="grid grid-cols-4 gap-2 mb-4">
           {[1,2,3,4,5,6,7,8].map(i=>(
-            <button key={i} onClick={()=>setCharIdx(i)}
+            <button key={i} onClick={()=>{setCharIdx(i);if(!name||CHAR_NAMES.includes(name))setName(CHAR_NAMES[i-1]);}}
               className={'rounded-2xl overflow-hidden border-4 transition-all '+(charIdx===i?'border-amber-400 scale-105 shadow-lg shadow-amber-900':'border-stone-700 opacity-60')}>
               <img src={`chars/char${i}.jpg`} className="w-full" style={{aspectRatio:'3/4',objectFit:'cover',objectPosition:'top'}}/>
               <div className="bg-stone-900 text-center text-xs text-stone-300 py-0.5 truncate px-1">{CHAR_NAMES[i-1]}</div>
@@ -1104,7 +1109,12 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
   const[room,setRoom]=useState(null);
   const[selectedGame,setSelectedGame]=useState('roulette');
   const[copied,setCopied]=useState(false);
+  const[qrUrl,setQrUrl]=useState(null);
   const navigated=useRef(false);
+  useEffect(()=>{
+    const url=`https://alud.github.io/BearRoulette/?room=${code}`;
+    if(typeof QRCode!=='undefined'){QRCode.toDataURL(url,{width:180,margin:1}).then(du=>setQrUrl(du)).catch(()=>{});}
+  },[code]);
 
   useEffect(()=>{
     const db=firebase.database();
@@ -1155,6 +1165,7 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
           {code}
         </button>
         <p className={`text-xs mt-1 transition-opacity ${copied?'text-green-400':'text-transparent'}`}>✓ Скопировано</p>
+        {qrUrl&&<div className="mt-2"><img src={qrUrl} alt="QR" className="mx-auto rounded-lg" style={{width:96,height:96}}/><p className="text-stone-500 text-xs mt-1">Отсканируй для входа</p></div>}
       </div>
 
       <div className="bg-stone-900 border border-stone-700 rounded-2xl p-4 mb-4 flex-1">
@@ -1202,50 +1213,75 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
 }
 
 /* ═══════════════ ONLINE GAMES ═══════════════ */
-function BackToLobbyBtn({onBack}){return <button onClick={onBack} className="text-stone-400 text-sm mb-4 block">← Лобби</button>;}
+function BackToLobbyBtn({isHost,onEndGame,onLeave}){
+  if(isHost)return(<button onClick={onEndGame} className="text-stone-400 text-sm mb-4 block w-full text-left">← Сменить игру</button>);
+  return(<button onClick={onLeave} className="text-amber-500 text-sm mb-4 block w-full text-left">← Выйти из комнаты</button>);
+}
 
-function OnlineRouletteGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+function OnlineRouletteGame({gameState,players,playerId,isHost,updateState,endGame,onLeave}){
   const{phase='playing',bulletIdx=0,revealed={},loser=null}=gameState;
+  const[drumRotation,setDrumRotation]=useState(0);
+  const[animating,setAnimating]=useState(false);
+  const[flash,setFlash]=useState(false);
+  const[muzzle,setMuzzle]=useState(false);
   const loserPlayer=loser?players.find(p=>p.id===loser):null;
   function pick(idx){
-    if(revealed[idx]||phase!=='playing')return;
-    const nr={...revealed,[idx]:playerId};
-    if(idx===bulletIdx){updateState({revealed:nr,loser:playerId,phase:'result'});}
-    else if(Object.keys(nr).length===5){updateState({revealed:nr,phase:'result',loser:null});}
-    else{updateState({revealed:nr});}
+    if(revealed[idx]||phase!=='playing'||animating)return;
+    setAnimating(true);setDrumRotation(r=>r+1080+Math.random()*360);
+    setTimeout(()=>{
+      setAnimating(false);const nr={...revealed,[idx]:playerId};
+      if(idx===bulletIdx){
+        playGunshot();setMuzzle(true);setTimeout(()=>setMuzzle(false),200);
+        setFlash(true);setTimeout(()=>setFlash(false),200);
+        updateState({revealed:nr,loser:playerId,phase:'result'});
+      } else if(Object.keys(nr).length===5){updateState({revealed:nr,phase:'result',loser:null});}
+      else{updateState({revealed:nr});}
+    },800);
   }
-  function restart(){updateState({phase:'playing',bulletIdx:Math.floor(Math.random()*6),revealed:{},loser:null});}
+  function restart(){setDrumRotation(r=>r+1080);updateState({phase:'playing',bulletIdx:Math.floor(Math.random()*6),revealed:{},loser:null});}
   return(
-    <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
-      <BackToLobbyBtn onBack={onBack}/>
-      <h2 className="text-xl font-black text-white mb-3">🍺 Пивная рулетка</h2>
-      <div className="grid grid-cols-3 gap-3 mb-4 flex-1">
-        {[0,1,2,3,4,5].map(idx=>{
-          const revId=revealed[idx];const isRev=!!revId;const showRes=isRev||phase==='result';const isLose=idx===bulletIdx;
-          const revP=revId?players.find(p=>p.id===revId):null;
-          return(<button key={idx} onClick={()=>pick(idx)} disabled={isRev||phase!=='playing'}
-            className={'aspect-square rounded-2xl transition-all duration-300 p-2 relative border-2 '+(!showRes?'bg-gradient-to-br from-stone-700 to-stone-900 active:scale-95 border-amber-700':isLose?'bg-gradient-to-br from-red-800 to-stone-900 border-red-500':'bg-gradient-to-br from-amber-500 to-amber-700 border-amber-300')}>
-            {!showRes&&<div className="flex items-center justify-center h-full"><span className="text-3xl text-amber-200 opacity-40 font-mono font-bold">{idx+1}</span></div>}
-            {showRes&&(isLose?<BrokenMug/>:<BeerMug/>)}
-            {revP&&<div className="absolute bottom-0 inset-x-0 text-center text-xs text-white bg-black bg-opacity-50 rounded-b-2xl py-0.5 truncate px-1">{revP.name}</div>}
-          </button>);
-        })}
-      </div>
-      {phase==='result'&&(
-        <div className={'rounded-2xl p-4 text-center mb-3 '+(loserPlayer?'bg-red-950 border border-red-600':'bg-amber-950 border border-amber-600')}>
-          {loserPlayer&&<><div className="flex justify-center mb-2"><PlayerAvatar player={loserPlayer} size="lg"/></div><div className="text-white font-black text-xl">{loserPlayer.name} пьёт штрафную! 💥</div></>}
-          {!loserPlayer&&<div className="text-amber-300 font-black text-xl">🎉 Все кружки целы!</div>}
+    <div className="min-h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex items-start justify-center py-4 px-3 overflow-x-hidden relative">
+      {flash&&<div className="fixed inset-0 bg-amber-300 pointer-events-none flash z-50"/>}
+      <div className="max-w-lg w-full relative z-10">
+        <BackToLobbyBtn isHost={isHost} onEndGame={endGame} onLeave={onLeave}/>
+        <div className="text-center mb-2">
+          <h1 className="text-3xl font-black text-amber-100 mb-0.5 tracking-tight" style={{textShadow:'0 0 30px rgba(251,191,36,0.5)'}}>🍺 ПИВНАЯ РУЛЕТКА</h1>
+          <p className="text-amber-200 opacity-50 text-xs">5 целых · 1 ловушка</p>
         </div>
-      )}
-      {phase==='result'&&isHost&&(<div className="flex gap-3">
-        <button onClick={restart} className="flex-1 py-3 bg-amber-500 text-stone-900 rounded-xl font-bold active:scale-95">🔄 Ещё раз</button>
-        <button onClick={endGame} className="py-3 px-4 bg-stone-800 text-stone-400 rounded-xl font-bold active:scale-95">Лобби</button>
-      </div>)}
+        <div className="flex justify-center mb-2"><div className="w-52 h-32 sm:w-64 sm:h-40"><RevolverClassic rotation={drumRotation} spinning={animating} muzzle={muzzle}/></div></div>
+        <div className="bg-stone-800 bg-opacity-80 border border-amber-700 rounded-xl px-4 py-3 mb-3 text-center">
+          <div className="text-base text-amber-50 font-medium leading-snug" style={{minHeight:'24px'}}>
+            {phase==='playing'?'Выбери кружку...':loserPlayer?loserPlayer.name+' пьёт штрафную! 💥':'🎉 Все кружки целы!'}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {[0,1,2,3,4,5].map(idx=>{
+            const revId=revealed[idx];const isRev=!!revId;const showRes=isRev||phase==='result';const isLose=idx===bulletIdx;
+            const revP=revId?players.find(p=>p.id===revId):null;
+            return(<button key={idx} id={'cell-'+idx} onClick={()=>pick(idx)} disabled={isRev||phase!=='playing'||animating}
+              className={'aspect-square rounded-xl transition-all duration-300 relative overflow-hidden p-1.5 active:scale-95 '+(!showRes?'bg-gradient-to-br from-stone-700 to-stone-900 border-2 border-amber-700':isLose?'bg-gradient-to-br from-red-700 via-amber-800 to-stone-900 border-2 border-red-500':'bg-gradient-to-br from-amber-500 to-amber-700 border-2 border-amber-300')+(animating?' animate-pulse':'')}>
+              {!showRes&&<div className="flex items-center justify-center h-full"><span className="text-2xl text-amber-200 opacity-40 font-mono font-bold">{idx+1}</span></div>}
+              {showRes&&(isLose?<BrokenMug/>:<BeerMug/>)}
+              {revP&&<div className="absolute bottom-0 inset-x-0 text-center text-xs text-white bg-black bg-opacity-50 rounded-b-xl py-0.5 truncate px-1">{revP.name}</div>}
+            </button>);
+          })}
+        </div>
+        {phase==='result'&&(
+          <div className={'rounded-2xl p-4 text-center mb-3 '+(loserPlayer?'bg-red-950 border border-red-600':'bg-amber-950 border border-amber-600')}>
+            {loserPlayer&&<><div className="flex justify-center mb-2"><PlayerAvatar player={loserPlayer} size="lg"/></div><div className="text-white font-black text-xl">{loserPlayer.name} пьёт штрафную! 💥</div></>}
+            {!loserPlayer&&<div className="text-amber-300 font-black text-xl">🎉 Все кружки целы!</div>}
+          </div>
+        )}
+        {phase==='result'&&isHost&&(<div className="flex gap-3">
+          <button onClick={restart} className="flex-1 py-3 bg-amber-500 text-stone-900 rounded-xl font-bold active:scale-95">🔄 Ещё раз</button>
+          <button onClick={endGame} className="py-3 px-4 bg-stone-800 text-stone-400 rounded-xl font-bold active:scale-95">Сменить игру</button>
+        </div>)}
+      </div>
     </div>
   );
 }
 
-function OnlineBombaGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+function OnlineBombaGame({gameState,players,playerId,isHost,updateState,endGame,onLeave}){
   const{phase='setup',duration=30,startTime,currentHolder,explodedPlayer}=gameState;
   const[timeLeft,setTimeLeft]=useState(duration);
   const myTurn=currentHolder===playerId;
@@ -1276,7 +1312,7 @@ function OnlineBombaGame({gameState,players,playerId,isHost,updateState,endGame,
   const danger=timeLeft<=10&&phase==='ticking';
   if(phase==='setup')return(
     <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center p-6 text-center">
-      <div className="absolute top-4 left-4"><BackToLobbyBtn onBack={onBack}/></div>
+      <div className="absolute top-4 left-4"><BackToLobbyBtn isHost={isHost} onEndGame={endGame} onLeave={onLeave}/></div>
       <div className="text-8xl mb-6">🧨</div><h2 className="text-2xl font-black text-white mb-6">Бомба</h2>
       {isHost&&<button onClick={startBomb} className="w-full max-w-xs py-5 bg-red-600 text-white rounded-2xl font-black text-xl active:scale-95">🔥 Поджечь!</button>}
       {!isHost&&<p className="text-stone-500">Ждём хоста...</p>}
@@ -1315,44 +1351,70 @@ function OnlineBombaGame({gameState,players,playerId,isHost,updateState,endGame,
   );
 }
 
-function OnlineNamesGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+function OnlineNamesGame({gameState,players,playerId,isHost,updateState,endGame,onLeave}){
   const{phase='idle',winnerIdx=null}=gameState;
-  const winner=winnerIdx!=null?players[winnerIdx%players.length]:null;
+  const[localRotation,setLocalRotation]=useState(0);
+  const[localSpinning,setLocalSpinning]=useState(false);
+  const prevPhaseRef=useRef('idle');
+  const n=players.length||1;
+  const cx=150,cy=150,r=128;
+  const winner=winnerIdx!=null?players[winnerIdx%n]:null;
+  useEffect(()=>{
+    if(phase==='spinning'&&prevPhaseRef.current!=='spinning'&&winnerIdx!=null){
+      const seg=360/n;
+      const extra=(5+Math.floor(Math.random()*5))*360;
+      setLocalRotation(rot=>{const base=Math.ceil((rot+1)/360)*360;return base+extra+winnerIdx*seg+seg/2;});
+      setLocalSpinning(true);
+      setTimeout(()=>setLocalSpinning(false),4000);
+    }
+    prevPhaseRef.current=phase;
+  },[phase]);
   function spin(){
+    if(localSpinning||phase==='spinning')return;
     const wi=Math.floor(Math.random()*players.length);
     updateState({phase:'spinning',winnerIdx:wi});
-    setTimeout(()=>updateState({phase:'result'}),2500);
+    setTimeout(()=>updateState({phase:'result'}),4200);
   }
   return(
-    <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
-      <BackToLobbyBtn onBack={onBack}/>
-      <h2 className="text-xl font-black text-white mb-4">🎰 Рулетка имён</h2>
-      <div className="bg-stone-900 rounded-2xl p-3 mb-4 flex-1 overflow-auto">
-        <div className="grid grid-cols-2 gap-2">
-          {players.map((p,i)=>(
-            <div key={p.id} className={`flex items-center gap-2 rounded-xl p-2.5 transition-all duration-500 ${phase==='result'&&winnerIdx===i?'bg-amber-500':'bg-stone-800'} ${phase==='spinning'?'animate-pulse':''}`}>
-              <PlayerAvatar player={p} size="sm"/>
-              <span className={`font-bold text-sm ${phase==='result'&&winnerIdx===i?'text-stone-900':'text-white'}`}>{p.name}</span>
-              {phase==='result'&&winnerIdx===i&&<span className="ml-auto text-lg">🍺</span>}
-            </div>
-          ))}
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-purple-950 via-stone-900 to-purple-950 flex flex-col items-center p-4">
+      <BackToLobbyBtn isHost={isHost} onEndGame={endGame} onLeave={onLeave}/>
+      <h1 className="text-2xl font-black text-purple-100 text-center mb-3">🎰 Рулетка имён</h1>
+      <div className="relative mb-4">
+        <svg viewBox="0 0 300 300" className="w-72 h-72">
+          <polygon points="150,26 141,4 159,4" fill="#fbbf24" stroke="#92400e" strokeWidth="1.5"/>
+          <g style={{transformOrigin:'150px 150px',transform:`rotate(${localRotation}deg)`,transition:localSpinning?'transform 4s cubic-bezier(0.17,0.67,0.1,1)':'none'}}>
+            {players.map((pl,i)=>{
+              const seg=360/n,startD=i*seg,endD=(i+1)*seg;
+              const sR=(startD-90)*Math.PI/180,eR=(endD-90)*Math.PI/180;
+              const x1=cx+r*Math.cos(sR),y1=cy+r*Math.sin(sR),x2=cx+r*Math.cos(eR),y2=cy+r*Math.sin(eR);
+              const path=`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${seg>180?1:0} 1 ${x2} ${y2} Z`;
+              const midD=(startD+endD)/2,midR=(midD-90)*Math.PI/180;
+              const lx=cx+r*0.65*Math.cos(midR),ly=cy+r*0.65*Math.sin(midR);
+              const nm=pl.name.length>8?pl.name.slice(0,7)+'…':pl.name;
+              return(<g key={i}><path d={path} fill={WHEEL_COLORS[i%WHEEL_COLORS.length]} stroke="#fff" strokeWidth="2"/><text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill="#fff" fontSize={pl.name.length>6?'9':'11'} fontWeight="bold" transform={`rotate(${midD},${lx},${ly})`}>{nm}</text></g>);
+            })}
+            <circle cx={cx} cy={cy} r="18" fill="#1f2937" stroke="#fff" strokeWidth="2"/>
+          </g>
+        </svg>
       </div>
-      {phase==='result'&&winner&&(<div className="bg-amber-950 border border-amber-600 rounded-2xl p-4 text-center mb-3">
-        <div className="flex justify-center mb-2"><PlayerAvatar player={winner} size="lg"/></div>
-        <div className="text-white font-black text-xl">{winner.name} пьёт! 🍺</div>
-      </div>)}
-      {phase==='spinning'&&<div className="text-center text-amber-300 text-2xl animate-pulse mb-3">🎲 Крутится...</div>}
-      {isHost&&(<div className="flex gap-3">
-        <button onClick={spin} disabled={phase==='spinning'} className="flex-1 py-4 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-2xl font-black text-lg active:scale-95 disabled:opacity-50">🎰 Крутить!</button>
+      {(localSpinning||phase==='spinning')&&<div className="text-center text-purple-300 text-lg animate-pulse mb-4">🎰 Крутится...</div>}
+      {phase==='result'&&winner&&(
+        <div className="text-center pop mb-4">
+          <div className="flex justify-center mb-2"><PlayerAvatar player={winner} size="lg"/></div>
+          <div className="text-3xl font-black text-yellow-300 mb-1">{winner.name}</div>
+          <div className="text-xl text-white mb-2">пьёт! 🍺</div>
+        </div>
+      )}
+      {isHost&&(<div className="flex gap-3 w-full max-w-xs">
+        <button onClick={spin} disabled={localSpinning||phase==='spinning'} className="flex-1 py-4 bg-purple-600 text-white rounded-2xl font-black text-lg active:scale-95 disabled:opacity-50">🎰 Крутить!</button>
         {phase==='result'&&<button onClick={endGame} className="py-4 px-4 bg-stone-800 text-stone-400 rounded-2xl font-bold active:scale-95">Лобби</button>}
       </div>)}
-      {!isHost&&phase==='idle'&&<p className="text-center text-stone-500 text-sm">Хост крутит колесо...</p>}
+      {!isHost&&phase==='idle'&&<p className="text-center text-stone-500 text-sm mt-2">Хост крутит колесо...</p>}
     </div>
   );
 }
 
-function OnlineKtoIzNasGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+function OnlineKtoIzNasGame({gameState,players,playerId,isHost,updateState,endGame,onLeave}){
   const{phase='voting',questionIdx=0,votes={}}=gameState;
   const question=QUESTIONS[questionIdx%QUESTIONS.length];
   const myVote=votes[playerId];
@@ -1367,7 +1429,7 @@ function OnlineKtoIzNasGame({gameState,players,playerId,isHost,updateState,endGa
   const winners=maxV>0?players.filter(p=>voteCounts[p.id]===maxV):[];
   return(
     <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
-      <div className="flex justify-between items-start mb-3"><BackToLobbyBtn onBack={onBack}/><span className="text-stone-500 text-xs">{questionIdx+1}/{QUESTIONS.length}</span></div>
+      <div className="flex justify-between items-start mb-3"><BackToLobbyBtn isHost={isHost} onEndGame={endGame} onLeave={onLeave}/><span className="text-stone-500 text-xs">{questionIdx+1}/{QUESTIONS.length}</span></div>
       <div className="bg-gradient-to-br from-blue-900 to-blue-950 border border-blue-600 rounded-2xl p-4 mb-4">
         <p className="text-blue-300 text-xs mb-1 uppercase tracking-widest">Кто из вас...</p>
         <p className="text-white font-black text-lg leading-snug">{question}</p>
@@ -1406,14 +1468,14 @@ function OnlineKtoIzNasGame({gameState,players,playerId,isHost,updateState,endGa
   );
 }
 
-function OnlineSvetoforGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+function OnlineSvetoforGame({gameState,players,playerId,isHost,updateState,endGame,onLeave}){
   const{phase='ready',loser=null}=gameState;
   const loserPlayer=loser?players.find(p=>p.id===loser):null;
   function roll(){updateState({phase:'result',loser:players[Math.floor(Math.random()*players.length)].id});}
   function reset(){updateState({phase:'ready',loser:null});}
   return(
     <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center p-6 text-center relative">
-      <div className="absolute top-4 left-4"><BackToLobbyBtn onBack={onBack}/></div>
+      <div className="absolute top-4 left-4"><BackToLobbyBtn isHost={isHost} onEndGame={endGame} onLeave={onLeave}/></div>
       <h2 className="text-2xl font-black text-white mb-6">🚦 Светофор</h2>
       {phase==='ready'&&(<>
         <div className="text-8xl mb-8 animate-pulse">🚦</div>
@@ -1435,7 +1497,7 @@ function OnlineSvetoforGame({gameState,players,playerId,isHost,updateState,endGa
   );
 }
 
-function OnlineKNBGame({gameState,players,playerId,isHost,updateState,endGame,onBack}){
+function OnlineKNBGame({gameState,players,playerId,isHost,updateState,endGame,onLeave}){
   const{phase='picking',picks={},round=1}=gameState;
   const SYM={r:'✊',p:'✋',s:'✌️'};const NM={r:'Камень',p:'Бумага',s:'Ножницы'};
   const myPick=picks[playerId];
@@ -1451,7 +1513,7 @@ function OnlineKNBGame({gameState,players,playerId,isHost,updateState,endGame,on
   const winChoice=phase==='result'?getWinChoice():null;
   return(
     <div className="min-h-screen bg-stone-950 p-4 flex flex-col">
-      <div className="flex justify-between items-center mb-3"><BackToLobbyBtn onBack={onBack}/><span className="text-stone-500 text-xs font-bold">Раунд {round}</span></div>
+      <div className="flex justify-between items-center mb-3"><BackToLobbyBtn isHost={isHost} onEndGame={endGame} onLeave={onLeave}/><span className="text-stone-500 text-xs font-bold">Раунд {round}</span></div>
       <h2 className="text-xl font-black text-white mb-4 text-center">✊ КНБ на пьянку</h2>
       {phase==='picking'&&(<>
         {!myPick?(<>
@@ -1494,7 +1556,7 @@ function OnlineKNBGame({gameState,players,playerId,isHost,updateState,endGame,on
 }
 
 /* —— РОУТЕР ОНЛАЙН-ИГР —— */
-function OnlineGameRouter({code,playerId,isHost,onBack}){
+function OnlineGameRouter({code,playerId,isHost,onBack,onLeaveRoom}){
   const[room,setRoom]=useState(null);
   useEffect(()=>{
     const db=firebase.database();
@@ -1512,7 +1574,8 @@ function OnlineGameRouter({code,playerId,isHost,onBack}){
   const gameState=room.gameState||{};
   function updateState(u){db.ref('rooms/'+code+'/gameState').update(u);}
   function endGame(){db.ref('rooms/'+code+'/game').set(null);db.ref('rooms/'+code+'/gameState').set(null);}
-  const props={gameState,players,playerId,isHost,code,updateState,endGame,onBack};
+  function leaveRoom(){db.ref('rooms/'+code+'/players/'+playerId).remove();onLeaveRoom();}
+  const props={gameState,players,playerId,isHost,code,updateState,endGame,onLeave:leaveRoom};
   const g=room.game;
   if(g==='roulette')return<OnlineRouletteGame {...props}/>;
   if(g==='bomba')return<OnlineBombaGame {...props}/>;
@@ -1534,7 +1597,7 @@ function App(){
   if(mode==='online'){
     if(!room)return<OnlineSetup onBack={()=>setMode(null)} onDone={setRoom}/>;
     if(!game)return<LobbyScreen {...room} onBack={()=>setRoom(null)} onStart={g=>setGame(g)}/>;
-    return<OnlineGameRouter {...room} onBack={()=>setGame(null)}/>;
+    return<OnlineGameRouter {...room} onBack={()=>setGame(null)} onLeaveRoom={()=>{setRoom(null);setGame(null);}}/>;
   }
 
   const back=()=>setGame(null);
