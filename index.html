@@ -1145,9 +1145,10 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
     else firebase.database().ref('rooms/'+code+'/players/'+playerId).remove();
     onBack();
   }
+  const joinUrl=`https://alud.github.io/BearRoulette/?room=${code}`;
   function copyCode(){
-    if(navigator.clipboard){navigator.clipboard.writeText(code);}
-    else{window.prompt('Скопируй код:',code);}
+    if(navigator.clipboard){navigator.clipboard.writeText(joinUrl);}
+    else{window.prompt('Скопируй ссылку:',joinUrl);}
     setCopied(true);setTimeout(()=>setCopied(false),2000);
   }
   function startGame(){
@@ -1169,11 +1170,11 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
       <button onClick={handleBack} className="text-stone-400 text-sm mb-4 text-left">← Выйти</button>
 
       <div className="bg-stone-900 border border-stone-700 rounded-2xl p-4 mb-4 text-center">
-        <p className="text-stone-500 text-xs mb-1">Код комнаты — покажи друзьям</p>
+        <p className="text-stone-500 text-xs mb-1">Нажми — скопируется ссылка для друзей</p>
         <button onClick={copyCode} className="text-5xl font-black text-amber-400 tracking-widest block w-full active:opacity-60">
           {code}
         </button>
-        <p className={`text-xs mt-1 transition-opacity ${copied?'text-green-400':'text-transparent'}`}>✓ Скопировано</p>
+        <p className={`text-xs mt-1 transition-opacity ${copied?'text-green-400':'text-transparent'}`}>✓ Ссылка скопирована</p>
         {qrUrl&&<div className="mt-2"><img src={qrUrl} alt="QR" className="mx-auto rounded-lg" style={{width:96,height:96}}/><p className="text-stone-500 text-xs mt-1">Отсканируй для входа</p></div>}
       </div>
 
