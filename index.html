@@ -1121,7 +1121,7 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
   const[qrUrl,setQrUrl]=useState(null);
   const navigated=useRef(false);
   useEffect(()=>{
-    const url=`https://alud.github.io/BearRoulette/?room=${code}`;
+    const url=`https://alud.github.io/BeerRoulette/?room=${code}`;
     if(typeof QRCode!=='undefined'){QRCode.toDataURL(url,{width:180,margin:1}).then(du=>setQrUrl(du)).catch(()=>{});}
   },[code]);
 
