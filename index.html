@@ -957,7 +957,7 @@ function OnlineSetup({onBack,onDone}){
         if(p.charIdx){setAvatarType('preset');setCharIdx(p.charIdx);if(!p.name)setName(CHAR_NAMES[p.charIdx-1]);}
         else{setAvatarType('custom');if(p.gender)setGender(p.gender);if(p.faceIdx!=null)setFaceIdx(p.faceIdx);}
         if(p.name)setName(p.name);
-        if(rp&&rp.length===4){setCode(rp.toUpperCase());setStep('joining');}
+        if(rp&&rp.length===4){setCode(rp.toUpperCase());}
       } else {
         setName(CHAR_NAMES[0]);
         if(rp&&rp.length===4){setCode(rp.toUpperCase());}
@@ -1094,12 +1094,20 @@ function OnlineSetup({onBack,onDone}){
 
       {error&&<p className="text-red-400 text-sm mb-3 text-center">{error}</p>}
       <div className="flex gap-3 mt-2 pb-4">
-        <button onClick={saveAndCreate} className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg">
-          + Создать<br/><span className="text-xs font-normal opacity-80">новую комнату</span>
-        </button>
-        <button onClick={goJoin} className="flex-1 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg">
-          → Войти<br/><span className="text-xs font-normal opacity-80">по коду</span>
-        </button>
+        {code.length===4?(
+          <button onClick={doJoin} className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl font-black text-lg active:scale-95 transition-transform shadow-lg">
+            → Войти в комнату {code}
+          </button>
+        ):(
+          <>
+            <button onClick={saveAndCreate} className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg">
+              + Создать<br/><span className="text-xs font-normal opacity-80">новую комнату</span>
+            </button>
+            <button onClick={goJoin} className="flex-1 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg">
+              → Войти<br/><span className="text-xs font-normal opacity-80">по коду</span>
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
