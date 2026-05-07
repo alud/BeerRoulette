@@ -894,6 +894,25 @@ function genCode(){
   return Array.from({length:4},()=>c[Math.floor(Math.random()*c.length)]).join('');
 }
 
+const M_FACES=['😊','😎','😤','🤩','😏','🤓','🥸','🤠','😂','😮','🙄','🥳'];
+const F_FACES=['🥰','😊','😎','🤩','😋','🥳','😌','🤗','😇','🤪','😜','💁'];
+
+function CustomAvatar({gender,faceIdx,size='md'}){
+  const faces=gender==='ж'?F_FACES:M_FACES;
+  const face=faces[faceIdx]||faces[0];
+  const bg=gender==='ж'?'from-pink-600 to-rose-800':'from-blue-600 to-blue-800';
+  const border=gender==='ж'?'border-pink-400':'border-blue-400';
+  const sz={sm:'w-10 h-10 text-xl',md:'w-12 h-14 text-3xl',lg:'w-20 h-20 text-5xl'};
+  return(<div className={`${sz[size]} bg-gradient-to-br ${bg} rounded-xl flex items-center justify-center border-2 ${border} flex-shrink-0`}>{face}</div>);
+}
+function PlayerAvatar({player,size='md'}){
+  if(player&&player.charIdx){
+    const sz={sm:'w-10 h-10',md:'w-12 h-14',lg:'w-20 h-20'};
+    return(<img src={`chars/char${player.charIdx}.jpg`} className={`${sz[size]} object-cover rounded-xl border-2 border-stone-600 flex-shrink-0`} style={{objectPosition:'top'}}/>);
+  }
+  return(<CustomAvatar gender={player&&player.gender||'м'} faceIdx={player&&player.faceIdx||0} size={size}/>);
+}
+
 /* ═══════════════ MODE LANDING ═══════════════ */
 function ModeLanding({onOffline,onOnline}){
   return(
@@ -920,25 +939,48 @@ function ModeLanding({onOffline,onOnline}){
 function OnlineSetup({onBack,onDone}){
   const[step,setStep]=useState('form');
   const[name,setName]=useState('');
-  const[charIdx,setCharIdx]=useState(0);
+  const[avatarType,setAvatarType]=useState('preset');
+  const[charIdx,setCharIdx]=useState(1);
+  const[gender,setGender]=useState('м');
+  const[faceIdx,setFaceIdx]=useState(0);
   const[code,setCode]=useState('');
   const[loading,setLoading]=useState(false);
+  const[profileLoading,setProfileLoading]=useState(true);
   const[error,setError]=useState('');
 
+  useEffect(()=>{
+    firebase.database().ref('users/'+getPlayerId()).get().then(snap=>{
+      if(snap.exists()){
+        const p=snap.val();
+        if(p.name)setName(p.name);
+        if(p.charIdx){setAvatarType('preset');setCharIdx(p.charIdx);}
+        else{setAvatarType('custom');if(p.gender)setGender(p.gender);if(p.faceIdx!=null)setFaceIdx(p.faceIdx);}
+      }
+      setProfileLoading(false);
+    }).catch(()=>setProfileLoading(false));
+  },[]);
+
+  function getProfile(){
+    const base={name:name.trim(),updatedAt:Date.now()};
+    if(avatarType==='preset')return{...base,charIdx,gender:null,faceIdx:null};
+    return{...base,charIdx:null,gender,faceIdx};
+  }
   function validate(){
     if(!name.trim())return'Введи имя';
-    if(!charIdx)return'Выбери аватар';
     return null;
   }
-  function create(){
+  function saveAndCreate(){
     const err=validate();if(err){setError(err);return;}
     setLoading(true);
     const playerId=getPlayerId();
     const roomCode=genCode();
-    firebase.database().ref('rooms/'+roomCode).set({
-      host:playerId,createdAt:Date.now(),game:null,
-      players:{[playerId]:{name:name.trim(),charIdx,joinedAt:Date.now()}}
-    }).then(()=>onDone({code:roomCode,playerId,isHost:true}))
+    const profile=getProfile();
+    const db=firebase.database();
+    Promise.all([
+      db.ref('users/'+playerId).set(profile),
+      db.ref('rooms/'+roomCode).set({host:playerId,createdAt:Date.now(),game:null,
+        players:{[playerId]:{...profile,joinedAt:Date.now()}}})
+    ]).then(()=>onDone({code:roomCode,playerId,isHost:true}))
       .catch(()=>{setError('Ошибка соединения');setLoading(false);});
   }
   function goJoin(){
@@ -950,19 +992,22 @@ function OnlineSetup({onBack,onDone}){
     setLoading(true);
     const playerId=getPlayerId();
     const uCode=code.toUpperCase();
-    firebase.database().ref('rooms/'+uCode).get().then(snap=>{
+    const profile=getProfile();
+    const db=firebase.database();
+    db.ref('rooms/'+uCode).get().then(snap=>{
       if(!snap.exists()){setError('Комната не найдена');setLoading(false);return;}
       const cnt=Object.keys(snap.val().players||{}).length;
       if(cnt>=8){setError('Комната заполнена');setLoading(false);return;}
-      return firebase.database().ref('rooms/'+uCode+'/players/'+playerId).set({
-        name:name.trim(),charIdx,joinedAt:Date.now()
-      }).then(()=>onDone({code:uCode,playerId,isHost:false}));
+      return Promise.all([
+        db.ref('users/'+playerId).set(profile),
+        db.ref('rooms/'+uCode+'/players/'+playerId).set({...profile,joinedAt:Date.now()})
+      ]).then(()=>onDone({code:uCode,playerId,isHost:false}));
     }).catch(()=>{setError('Ошибка соединения');setLoading(false);});
   }
 
-  if(loading)return(
+  if(profileLoading||loading)return(
     <div className="min-h-screen bg-stone-950 flex items-center justify-center">
-      <div className="text-white text-xl animate-pulse">⏳ Подключение...</div>
+      <div className="text-white text-xl animate-pulse">{loading?'⏳ Подключение...':'Загрузка...'}</div>
     </div>
   );
 
@@ -975,31 +1020,75 @@ function OnlineSetup({onBack,onDone}){
         className="w-full bg-stone-800 text-white text-center text-5xl font-black tracking-widest rounded-2xl p-4 border-2 border-stone-600 focus:border-amber-500 outline-none mb-3"
         placeholder="XXXX" autoFocus/>
       {error&&<p className="text-red-400 text-sm mb-3 text-center">{error}</p>}
-      <button onClick={doJoin} className="w-full py-4 bg-amber-500 text-stone-900 rounded-2xl font-black text-xl active:scale-95 transition-transform">
-        Войти →
-      </button>
+      <button onClick={doJoin} className="w-full py-4 bg-amber-500 text-stone-900 rounded-2xl font-black text-xl active:scale-95 transition-transform">Войти →</button>
     </div>
   );
 
+  const faces=gender==='ж'?F_FACES:M_FACES;
   return(
-    <div className="min-h-screen bg-stone-950 flex flex-col p-4">
+    <div className="min-h-screen bg-stone-950 flex flex-col p-4 overflow-y-auto">
       <button onClick={onBack} className="text-stone-400 text-sm mb-4">← Назад</button>
-      <h2 className="text-2xl font-black text-white mb-4">Как тебя зовут?</h2>
+
+      <h2 className="text-xl font-black text-white mb-2">Как тебя зовут?</h2>
       <input value={name} onChange={e=>setName(e.target.value)} maxLength={12}
-        className="w-full bg-stone-800 text-white text-xl font-bold rounded-2xl p-3 border-2 border-stone-600 focus:border-amber-500 outline-none mb-5"
-        placeholder="Твоё имя" autoFocus/>
-      <p className="text-stone-400 text-sm mb-3">Выбери аватар:</p>
-      <div className="grid grid-cols-4 gap-2 mb-5">
-        {[1,2,3,4,5,6,7,8].map(i=>(
-          <button key={i} onClick={()=>setCharIdx(i)}
-            className={'rounded-2xl overflow-hidden border-4 transition-all '+(charIdx===i?'border-amber-400 scale-105 shadow-lg shadow-amber-900':'border-stone-700 opacity-70')}>
-            <img src={`chars/char${i}.jpg`} className="w-full" style={{aspectRatio:'3/4',objectFit:'cover',objectPosition:'top'}}/>
-          </button>
-        ))}
+        className="w-full bg-stone-800 text-white text-xl font-bold rounded-2xl p-3 border-2 border-stone-600 focus:border-amber-500 outline-none mb-4"
+        placeholder="Твоё имя"/>
+
+      <div className="flex gap-2 mb-4">
+        <button onClick={()=>setAvatarType('preset')}
+          className={'flex-1 py-2.5 rounded-xl font-bold text-sm transition-all '+(avatarType==='preset'?'bg-amber-500 text-stone-900':'bg-stone-800 text-stone-400')}>
+          👥 Команда
+        </button>
+        <button onClick={()=>setAvatarType('custom')}
+          className={'flex-1 py-2.5 rounded-xl font-bold text-sm transition-all '+(avatarType==='custom'?'bg-purple-600 text-white':'bg-stone-800 text-stone-400')}>
+          ✏️ Свой аватар
+        </button>
       </div>
+
+      {avatarType==='preset'&&(
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {[1,2,3,4,5,6,7,8].map(i=>(
+            <button key={i} onClick={()=>setCharIdx(i)}
+              className={'rounded-2xl overflow-hidden border-4 transition-all '+(charIdx===i?'border-amber-400 scale-105 shadow-lg shadow-amber-900':'border-stone-700 opacity-60')}>
+              <img src={`chars/char${i}.jpg`} className="w-full" style={{aspectRatio:'3/4',objectFit:'cover',objectPosition:'top'}}/>
+              <div className="bg-stone-900 text-center text-xs text-stone-300 py-0.5 truncate px-1">{CHAR_NAMES[i-1]}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {avatarType==='custom'&&(
+        <div className="mb-4">
+          <div className="flex gap-2 mb-3">
+            <button onClick={()=>setGender('м')} className={'flex-1 py-3 rounded-xl font-bold text-base transition-all '+(gender==='м'?'bg-blue-600 text-white':'bg-stone-800 text-stone-400')}>
+              👨 Мужской
+            </button>
+            <button onClick={()=>setGender('ж')} className={'flex-1 py-3 rounded-xl font-bold text-base transition-all '+(gender==='ж'?'bg-pink-600 text-white':'bg-stone-800 text-stone-400')}>
+              👩 Женский
+            </button>
+          </div>
+          <p className="text-stone-400 text-xs mb-2">Выбери лицо:</p>
+          <div className="grid grid-cols-6 gap-2 mb-3">
+            {faces.map((face,i)=>(
+              <button key={i} onClick={()=>setFaceIdx(i)}
+                className={'aspect-square rounded-2xl flex items-center justify-center text-2xl border-2 transition-all '+(faceIdx===i?(gender==='м'?'bg-blue-800 border-blue-400 scale-110':'bg-pink-800 border-pink-400 scale-110'):'bg-stone-800 border-stone-700 opacity-70')}>
+                {face}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 bg-stone-900 rounded-xl p-3">
+            <CustomAvatar gender={gender} faceIdx={faceIdx} size="md"/>
+            <div>
+              <div className="text-white font-bold text-sm">{name||'Твоё имя'}</div>
+              <div className="text-stone-400 text-xs">{gender==='м'?'Мужской':'Женский'} · лицо {faceIdx+1}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {error&&<p className="text-red-400 text-sm mb-3 text-center">{error}</p>}
-      <div className="flex gap-3 mt-2">
-        <button onClick={create} className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg">
+      <div className="flex gap-3 mt-2 pb-4">
+        <button onClick={saveAndCreate} className="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg">
           + Создать<br/><span className="text-xs font-normal opacity-80">новую комнату</span>
         </button>
         <button onClick={goJoin} className="flex-1 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-2xl font-bold active:scale-95 transition-transform shadow-lg">
@@ -1065,7 +1154,7 @@ function LobbyScreen({code,playerId,isHost,onBack,onStart}){
         <div className="space-y-2">
           {players.map(p=>(
             <div key={p.id} className={'flex items-center gap-3 rounded-xl p-2 '+(p.id===playerId?'bg-stone-800 ring-1 ring-amber-700':'')}>
-              <img src={`chars/char${p.charIdx||1}.jpg`} className="w-10 h-12 object-cover rounded-xl border-2 border-stone-600" style={{objectPosition:'top'}}/>
+              <PlayerAvatar player={p} size="md"/>
               <div>
                 <div className="text-white font-bold text-sm">{p.name}{p.id===playerId&&<span className="text-stone-500 text-xs ml-1">(ты)</span>}</div>
                 {room&&p.id===room.host&&<div className="text-amber-400 text-xs">👑 Хост</div>}
