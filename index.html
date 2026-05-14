@@ -380,7 +380,14 @@ function NamesGame({onBack}){
     setWinner(null);setGulps(null);setSpinning(true);
     const wi=Math.floor(Math.random()*players.length);
     const seg=360/players.length;
-    const targetR=rotation+(5+Math.floor(Math.random()*5))*360+(wi+0.5)*seg;
+    // Стрелка стоит сверху (270° в SVG). Чтобы центр сегмента wi оказался под стрелкой:
+    // нужен поворот = (360 - wi*seg - seg/2) mod 360
+    const alignAngle=((360-wi*seg-seg/2)%360+360)%360;
+    const fullSpins=(5+Math.floor(Math.random()*5))*360;
+    // Убираем текущий остаток вращения чтобы не накапливался дрейф
+    const curMod=((rotation%360)+360)%360;
+    const delta=(alignAngle-curMod+360)%360;
+    const targetR=rotation-curMod+fullSpins+delta;
     setRotation(targetR);
     setTimeout(()=>{setSpinning(false);setWinner(players[wi]);},4000);
   }
@@ -772,7 +779,12 @@ function BillGame({onBack}){
     setWinner(null);setSpinning(true);
     const wi=Math.floor(Math.random()*players.length);
     const seg=360/players.length;
-    const targetR=rotation+(5+Math.floor(Math.random()*5))*360+(wi+0.5)*seg;
+    // Стрелка стоит сверху (270° в SVG). Чтобы центр сегмента wi оказался под стрелкой:
+    const alignAngle=((360-wi*seg-seg/2)%360+360)%360;
+    const fullSpins=(5+Math.floor(Math.random()*5))*360;
+    const curMod=((rotation%360)+360)%360;
+    const delta=(alignAngle-curMod+360)%360;
+    const targetR=rotation-curMod+fullSpins+delta;
     setRotation(targetR);
     setTimeout(()=>{setSpinning(false);setWinner(players[wi]);},4000);
   }
@@ -1373,7 +1385,12 @@ function OnlineNamesGame({gameState,players,playerId,isHost,updateState,endGame,
     if(phase==='spinning'&&prevPhaseRef.current!=='spinning'&&winnerIdx!=null){
       const seg=360/n;
       const extra=(5+Math.floor(Math.random()*5))*360;
-      setLocalRotation(rot=>{const base=Math.ceil((rot+1)/360)*360;return base+extra+winnerIdx*seg+seg/2;});
+      setLocalRotation(rot=>{
+        const curMod=((rot%360)+360)%360;
+        const alignAngle=((360-winnerIdx*seg-seg/2)%360+360)%360;
+        const delta=(alignAngle-curMod+360)%360;
+        return rot-curMod+extra+delta;
+      });
       setLocalSpinning(true);
       setTimeout(()=>setLocalSpinning(false),4000);
     }
